@@ -260,7 +260,7 @@ public:
 	/* close the iterator (clear the space) */
 	virtual void close() = 0;
 };
-/* before y's all targets visited, y is not extracted */
+/* to iterate 'x' only when all 'y' are visited, where x subsumes y */
 class MSGIter_DownTop : public MSGIterator {
 public:
 	MSGIter_DownTop() : visits(), window(), qset() {}
@@ -296,6 +296,7 @@ private:
 	*/
 	bool accessible(MSGVertex *);
 };
+/* to iterate 'y' only when all 'x' are visited, where x subsumes y */
 class MSGIter_TopDown : public MSGIterator {
 public:
 	MSGIter_TopDown() : visits(), window(), qset() {}
@@ -331,7 +332,7 @@ private:
 	*/
 	bool accessible(MSGVertex *);
 };
-
+/* the sequence by each node to be transversed is undecidable */
 class MSGIter_Random : public MSGIterator {
 public:
 	MSGIter_Random() : graph(nullptr), nodes() {}
@@ -412,5 +413,3 @@ private:
 	MSGIter_TopDown td_iter;
 	MSGIter_Random rd_iter;
 };
-
-

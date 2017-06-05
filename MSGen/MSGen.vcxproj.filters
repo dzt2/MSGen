@@ -28,6 +28,9 @@
     <Filter Include="Source Files\driver">
       <UniqueIdentifier>{d0f7434c-e4d9-4fa7-8aa5-c7ae0cb82aaa}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\parse">
+      <UniqueIdentifier>{a1fcfc88-ea54-4088-9740-dd17fa2d6460}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ctext.h">
