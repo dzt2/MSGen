@@ -19,7 +19,7 @@
 class CMutantBlock;
 class CMutantBlockSet;
 class CMutantBlockBuilder;
-class CMutantBlockMerger;
+class LocalMSGraphBuilder;
 
 /* mutblock = {coverage; mutants; local-MSG;}*/
 class CMutantBlock {
@@ -47,8 +47,10 @@ public:
 
 	/* create and delete */
 	friend class CMutantBlockSet;
-	/* insert mutant and modify local-graph */
+	/* insert mutant */
 	friend class CMutantBlockBuilder;
+	/* build local subsumption graph in block */
+	friend class LocalMSGraphBuilder;
 
 private:
 	/* coverage vector */
@@ -94,7 +96,8 @@ private:
 	/* index from mutant to block */
 	std::map<Mutant::ID, CMutantBlock *> index;
 };
-/* builder for mutations blocks */
+
+/* to build mutant block (with empty local graph) */
 class CMutantBlockBuilder {
 public: 
 	/* create a builder for block set */
@@ -119,3 +122,29 @@ private:
 	/* trie for searching block by coverage */
 	BitTrieTree * trie;
 };
+/* to build up the local MSG for each block in block set */
+class LocalMSGraphBuilder {
+public:
+	/* builder for local MSG in blocks */
+	LocalMSGraphBuilder() : bset(nullptr), builders() {}
+	/* deconstructor */
+	~LocalMSGraphBuilder() { close(); }
+
+	/* build up the local MSG for each block in set */
+	void build_local_graph(CMutantBlockSet &, ScoreProducer &, ScoreConsumer &);
+
+protected:
+	/* open the */
+	void open(CMutantBlockSet &);
+	/* insert a next score vector for building local MSG */
+	void insert(const ScoreVector &);
+	/* close the openned block set */
+	void close();
+
+private:
+	/* set of mutant blocks */
+	CMutantBlockSet * bset;
+	/* map from block to the builder for its local MSG */
+	std::map<CMutantBlock *, MSGBuilder *> builders;
+};
+

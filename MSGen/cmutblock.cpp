@@ -71,10 +71,53 @@ void CMutantBlockBuilder::build_for(CMutantBlockSet & bset,
 	this->close();
 }
 
+void LocalMSGraphBuilder::open(CMutantBlockSet & set) {
+	close(); bset = &set; 
+	auto beg = set.get_blocks().begin();
+	auto end = set.get_blocks().end();
+	while (beg != end) {
+		CMutantBlock * block = *(beg++);
+		MSGBuilder * gbuilder = new MSGBuilder();
+		gbuilder->open(block->get_graph_for_build());
+		builders[block] = gbuilder;
+	}
+}
+void LocalMSGraphBuilder::close() {
+	/* clear builders */
+	auto beg = builders.begin();
+	auto end = builders.end();
+	while (beg != end) {
+		MSGBuilder * builder = (beg++)->second;
+		builder->end_score_vectors();
+		delete builder;
+	}
+	builders.clear();
+
+	/* reset blocks */ bset = nullptr;
+}
+void LocalMSGraphBuilder::insert(const ScoreVector & svec) {
+	CMutantBlock & block = bset->get_block(svec.get_mutant());
+	MSGBuilder * builder = (builders.find(&block))->second;
+	builder->add_score_vector(svec);
+}
+void LocalMSGraphBuilder::build_local_graph(CMutantBlockSet & set, 
+	ScoreProducer & producer, ScoreConsumer & consumer) {
+	ScoreVector * svec;
+
+	this->open(set);
+	while ((svec = producer.produce()) != nullptr) {
+		this->insert(*svec);
+		consumer.consume(svec);
+	}
+	this->close();
+
+	return;
+}
+
 int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "profit"; 
-	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "tcas"; 
+	File & root = *(new File(prefix + prname)); TestType ttype = TestType::tcas;
 
 	// create code-project, mutant-project, test-project
 	CProgram & program = *(new CProgram(root));
@@ -101,6 +144,12 @@ int main() {
 	CTrace & ctrace = *(new CTrace(root, cspace, tspace));
 	CoverageSpace & covspace = ctrace.get_space();
 
+	// score
+	CScore & cscore = *(new CScore(root, cmutant, ctest));
+
+	// builders 
+	CMutantBlockBuilder builder; LocalMSGraphBuilder gbuilder;
+
 	// get coverage vector
 	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
 	cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
@@ -110,6 +159,8 @@ int main() {
 
 		// get mutations for code-file
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+		MutantSet & mutants = *(mspace.create_set()); 
+		mutants.complement();
 
 		// load coverage 
 		covspace.add_file_coverage(cfile, tests);
@@ -121,28 +172,39 @@ int main() {
 		CoverageProducer cproducer(mspace, fcov);
 		CoverageConsumer ccomsumer;
 
+		// get score producer and consumer
+		ScoreSource & score_src = cscore.get_source(cfile);
+		ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+		ScoreProducer sproducer(score_func); ScoreConsumer sconsumer(score_func);
+
 		// create mutblock and builder
 		CMutantBlockSet & blocks = *(new CMutantBlockSet(mspace));
-		CMutantBlockBuilder builder;		
 
 		// building blocks
 		builder.build_for(blocks, cproducer, ccomsumer);
+		gbuilder.build_local_graph(blocks, sproducer, sconsumer);
+
+		// print block information 
 		std::cout << "\t[B]: " << blocks.get_blocks().size() << std::endl;
 		auto beg = blocks.get_blocks().begin();
 		auto end = blocks.get_blocks().end();
 		while (beg != end) {
 			CMutantBlock & block = *(*(beg++));
-			std::cout << "\t\t[C]:" << block.get_mutants().size() << "\t" << block.get_coverage().to_string() << std::endl;
+			std::cout << "\t\t[B]: { M = " << block.get_mutants().size();
+			const MSGraph & local_graph = block.get_local_graph();
+			std::cout << "; C = " << local_graph.number_of_vertices();
+			std::cout << " }\n";
 		}
+
 
 		// delete resources
 		delete &blocks;
 	}
 
 	// delete resources
-	delete &ctrace;
-	delete &cmutant; delete &ctest;
-	delete &program; delete &root;
+	delete & cscore; delete &ctrace;
+	delete &cmutant; delete & ctest;
+	delete &program; delete &  root;
 	// end to return 
 	std::cout << "Press any key to exit...";
 	getchar(); exit(0);

@@ -504,3 +504,23 @@ bool MSGBuilder::build(MSGraph & graph, ScoreProducer & producer, ScoreConsumer 
 	this->build_graph();
 	return true;
 }
+void MSGBuilder::add_score_vector(const ScoreVector & svec) {
+	/* insert the vector into bit-trie */
+	BitTrie * leaf = trie->insert_vector(svec.get_vector());
+
+	/* first created, then construct a vertex */
+	if (leaf->get_data() == nullptr) {
+		MSGVertex & vex = graph->new_vertex(svec);
+		hierarchy.add_vertex(vex);
+		leaf->set_data(&vex);
+	}
+	/* existing node, then add mutant */
+	else {
+		MSGVertex * vex = (MSGVertex *)(leaf->get_data());
+		graph->add_cluster(*vex, svec);
+	}
+}
+void MSGBuilder::end_score_vectors() {
+	this->rankMutantByDegree();
+	this->build_graph();
+}

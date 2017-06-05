@@ -368,15 +368,24 @@ public:
 	/* get the hierarchy for analysis */
 	const MuHierarchy & get_hierarchy() const { return hierarchy; }
 
-protected:
 	/* clear the original graph and hierarchy */
 	bool open(MSGraph &);
+	/* add score vector into the builder */
+	void add_score_vector(const ScoreVector &);
+	/* end to add score vectors and build the graph */
+	void end_score_vectors();
+	
+protected:
 	/* clustering the mutants and create isolated vertices (not added) */
 	bool clusterMutants(ScoreProducer &, ScoreConsumer &);
 	/* sort the mutant clusters by their degrees in hierarchy */
 	bool rankMutantByDegree();
 	/* create edges between nodes and add them into graph (update roots and leafs) */
 	bool build_graph();
+	/* calculate the set of nodes directly subsumed by x in VS*/
+	void direct_subsumed(const MSGVertex &, std::set<MSGVertex *> &);
+	/* add nodes into graph and update its roots, and leafs */
+	void add_vertices(const std::vector<MSGVertex *> & level);
 	/* set the graph as null, other operations are invalid for access */
 	bool close() {
 		graph = nullptr;
@@ -384,11 +393,6 @@ protected:
 			delete trie;
 		return true;
 	}
-
-	/* calculate the set of nodes directly subsumed by x in VS*/
-	void direct_subsumed(const MSGVertex &, std::set<MSGVertex *> &);
-	/* add nodes into graph and update its roots, and leafs */
-	void add_vertices(const std::vector<MSGVertex *> & level);
 
 private:
 	/* whether x subsumes y */
@@ -398,16 +402,24 @@ private:
 	/* calculate all those subsuming x in graph */
 	bool subsuming(const MSGVertex &, std::set<MSGVertex *> &);
 
+	/* compute directly subsumed nodes for x, in order of down-top */
 	void direct_subsumed_downtop(const MSGVertex &, std::set<MSGVertex *> &);
+	/* compute directly subsumed nodes for x, in order of top-down */
 	void direct_subsumed_topdown(const MSGVertex &, std::set<MSGVertex *> &);
+	/* compute directly subsumed nodes for x, in order of random */
 	void direct_subsumed_random(const MSGVertex &, std::set<MSGVertex *> &);
 
-
+	/* subsumption graph for building */
 	MSGraph * graph;
+	/* trie for classifying mutants by score vector */
 	BitTrieTree * trie;
+	/* hierarchy of mutations */
 	MuHierarchy hierarchy;
 
+	/* down-top iterator */
 	MSGIter_DownTop dt_iter;
+	/* top-down iterator */
 	MSGIter_TopDown td_iter;
+	/* random iterator */
 	MSGIter_Random rd_iter;
 };
