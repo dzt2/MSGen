@@ -114,6 +114,74 @@ void LocalMSGraphBuilder::build_local_graph(CMutantBlockSet & set,
 	return;
 }
 
+bool MutantBlockBridge::has_source_vertex(MSGVertex & src) const {
+	return source_vertices.count(&src) > 0;
+}
+bool MutantBlockBridge::has_target_vertices(MSGVertex & src) const {
+	return target_subsumes.count(&src) > 0;
+}
+const std::list<MuSubsume> & MutantBlockBridge::get_targets_of(MSGVertex & src) const {
+	if (target_subsumes.count(&src) == 0) {
+		CError error(CErrorType::InvalidArguments, "MutantBlockBridge::get_targets_of", "Invalid source vertex: " + std::to_string(src.get_id()));
+		CErrorConsumer::consume(error);
+	}
+	auto iter = target_subsumes.find(&src);
+	return *(iter->second);
+}
+void MutantBlockBridge::init() {
+	/* clear original set and subsumption */
+	source_vertices.clear();
+	target_subsumes.clear();
+
+	/* extract valid vertices in source graph */
+	const MSGraph & graph = source.get_local_graph();
+	MSGVertex::ID vid, vnum = graph.number_of_vertices();
+	for (vid = 0; vid < vnum; vid++) {
+		/* get next node in source graph (featured) */
+		MSGVertex & vertex = graph.get_vertex(vid);		
+		if (vertex.get_feature() == nullptr) continue;
+
+		/* validate whether the nodes in target can be subsumed by source node */
+		const BitSeq & svex_vector = vertex.get_feature()->get_vector();
+		const BitSeq & tblock_coverage = target.get_coverage();
+		if (!svex_vector.all_zeros() && 
+			svex_vector.subsume(tblock_coverage)) 
+			source_vertices.insert(&vertex);
+	}
+}
+void MutantBlockBridge::clear() {
+	/* delete subsumption list */
+	auto beg = target_subsumes.begin();
+	auto end = target_subsumes.end();
+	while (beg != end) 
+		delete (beg++)->second;
+
+	/* clear all sets */
+	source_vertices.clear();
+	target_subsumes.clear();
+}
+void MutantBlockBridge::links(MSGVertex & src, MSGVertex & trg) {
+	if (source_vertices.count(&src) == 0) {
+		CError error(CErrorType::InvalidArguments, "MutantBlockBridge::links", "Invalid source vertex: " + std::to_string(src.get_id()));
+		CErrorConsumer::consume(error);
+	}
+	else {
+		std::list<MuSubsume> * edges;
+		if (target_subsumes.count(&src) == 0) {
+			edges = new std::list<MuSubsume>();
+			target_subsumes[&src] = edges;
+		}
+		else {
+			auto iter = target_subsumes.find(&src);
+			edges = iter->second;
+		}
+
+		MuSubsume edge(src, trg);
+		edges->push_front(edge);
+	}
+}
+
+
 int main() {
 	// initialization
 	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "tcas"; 

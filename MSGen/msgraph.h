@@ -60,9 +60,6 @@ public:
 	const MSGVertex & get_source() const { return source; }
 	/* get the node to this edge points */
 	const MSGVertex & get_target() const { return target; }
-
-	/* create and delete */
-	friend class MSGVexPort;
 private:
 	/* node that subsumes */
 	const MSGVertex & source;

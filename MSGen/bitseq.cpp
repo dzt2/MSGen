@@ -1,4 +1,5 @@
 #include "bitseq.h"
+#include "cerror.h"
 #include <queue>
 #include "ctext.h"
 
@@ -108,6 +109,29 @@ void BitSeq::assign(const BitSeq & seq) {
 	for (int i = 0; i < bits; i++)
 		this->set_bit(i, seq.get_bit(i));
 }
+void BitSeq::conjunct(const BitSeq & y) {
+	if (this->bit_num != y.bit_num) {
+		CError error(CErrorType::InvalidArguments, "BitSeq::conjunct", "Lenght is not matched: ("
+			+ std::to_string(bit_num) + " <--> " + std::to_string(y.bit_num) + ")");
+		CErrorConsumer::consume(error);
+	}
+	else {
+		for (int i = 0; i < length; i++) 
+			bytes[i] = (bytes[i] & (y.bytes)[i]);
+	}
+}
+void BitSeq::bit_not() {
+	for (int i = 0; i < length; i++)
+		bytes[i] = ~(bytes[i]);
+}
+bool BitSeq::all_zeros() const {
+	for (int i = 0; i < length; i++) {
+		if (bytes[i] != '\0')
+			return false;
+	}
+	return true;
+}
+
 
 // BitTrie
 BitTrie::BitTrie(BitSeq::size_t bias_index, const BitSeq & partial_key)

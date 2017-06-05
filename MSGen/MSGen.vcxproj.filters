@@ -69,6 +69,9 @@
     <ClInclude Include="cmutblock.h">
       <Filter>Header Files\parse</Filter>
     </ClInclude>
+    <ClInclude Include="cblock.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp">

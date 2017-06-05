@@ -18,8 +18,13 @@
 // class list
 class CMutantBlock;
 class CMutantBlockSet;
+class MutantBlockBridge;
+class CMutantBlockGraph;
+
+// class for builders
 class CMutantBlockBuilder;
 class LocalMSGraphBuilder;
+class LocalMSGraphConnect;
 
 /* mutblock = {coverage; mutants; local-MSG;}*/
 class CMutantBlock {
@@ -85,6 +90,8 @@ protected:
 	CMutantBlock * new_block(const BitSeq &);
 	/* add mutant into the block */
 	void add_mutant(Mutant::ID, CMutantBlock *);
+	/* initialize the bridges between nodes */
+	void build_bridges();
 	/* clear all the blocks in the set */
 	void clear();
 
@@ -95,6 +102,62 @@ private:
 	std::set<CMutantBlock *> blocks;
 	/* index from mutant to block */
 	std::map<Mutant::ID, CMutantBlock *> index;
+	/* set of (valid) bridges between mutant blocks */
+	std::set<MutantBlockBridge *>  bridges;
+};
+/* bridge between local graphs in different blocks (valid cluster) */
+class MutantBlockBridge {
+protected:
+	/* create a bridge to represents the subsumption from block-1 to block-2 */
+	MutantBlockBridge(const CMutantBlock & src, const CMutantBlock & trg)
+		: source(src), target(trg), source_vertices(), target_subsumes() { init(); }
+	/* deconstructor */
+	~MutantBlockBridge() { clear(); }
+
+	/* initialize the bridge between block */
+	void init();
+	/* link the source vertex to target vertex of another graph */
+	void links(MSGVertex &, MSGVertex &);
+	/* clear the subsumption form nodes in source block to those of target block */
+	void clear();
+public:
+	/* get the source block */
+	const CMutantBlock & get_source_block() const { return source; }
+	/* get the target block */
+	const CMutantBlock & get_target_block() const { return target; }
+
+	/* get set of source vertices (valid) to subsume nodes in another block */
+	const std::set<MSGVertex *> & get_source_vertices() const { return source_vertices; }
+	/* get the map from source node to their directly subsumed node in another block */
+	const std::map<MSGVertex *, std::list<MuSubsume> *> & get_targets() const { return target_subsumes; }
+	
+	/* whether the specified node is valid to subsume nodes in target block */
+	bool has_source_vertex(MSGVertex &) const;
+	/* whether specified source vertex corresponds to target nodes in another block */
+	bool has_target_vertices(MSGVertex &) const;
+	/* get the nodes directly subsumed by the specified node in target block */
+	const std::list<MuSubsume> & get_targets_of(MSGVertex &) const;
+	/* the number of nodes to be directly subsumed by specified node */
+	size_t get_degree_of(MSGVertex & src) const { return get_targets_of(src).size(); }
+
+	/* to create and delete */
+	friend class CMutantBlockGraph;
+	/* to link nodes between blocks */
+	friend class LocalMSGraphConnect;
+private:
+	/* source block */
+	const CMutantBlock & source;
+	/* target block */
+	const CMutantBlock & target;
+	/* vertices (valid) to subsume nodes in another block */
+	std::set<MSGVertex *> source_vertices;
+	/* map from source vertices to their directly subsuming nodes in target block */
+	std::map<MSGVertex *, std::list<MuSubsume> *> target_subsumes;
+};
+/* graph between blocks (with valid connection) */
+class CMutantBlockGraph {
+public:
+	CMutantBlockGraph();
 };
 
 /* to build mutant block (with empty local graph) */
@@ -147,4 +210,3 @@ private:
 	/* map from block to the builder for its local MSG */
 	std::map<CMutantBlock *, MSGBuilder *> builders;
 };
-

@@ -112,6 +112,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="bitseq.h" />
+    <ClInclude Include="cblock.h" />
     <ClInclude Include="cerror.h" />
     <ClInclude Include="cfile.h" />
     <ClInclude Include="cmutant.h" />

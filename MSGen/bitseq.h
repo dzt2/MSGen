@@ -54,6 +54,9 @@ public:
 	/* set the ith bit in sequence */
 	void set_bit(size_t, bit);
 
+	/* whether bit-string is all-zeros */
+	bool all_zeros() const;
+
 	/* assign the bit-string with another */
 	void assign(const BitSeq &);
 	/* whether this sequence subsumes another */
@@ -63,6 +66,11 @@ public:
 
 	/* converse the sequence to string */
 	std::string to_string() const;
+
+	/* conjunct the target with this sequence (and update it) */
+	void conjunct(const BitSeq &);
+	/* negate all the bits in the sequence */
+	void bit_not();
 
 	/* number of bytes occupied by this sequence */
 	int byte_number() const;
