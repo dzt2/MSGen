@@ -194,6 +194,7 @@ protected:
 	const ScoreFunction * function;
 };
 
+/* vector to represent the coverage for each mutant */
 class CoverageVector {
 protected:
 	/* construct all-zeros coverage */

@@ -86,7 +86,7 @@ size_t TextBuild::lineOfIndex(size_t index) const {
 /* derive file names in current directory */
 bool derive_file_children(const std::string & file, std::vector<std::string> & list) {
 	/* declarations */
-	long hfile = 0L; struct _finddata_t fileinfo;
+	intptr_t hfile = 0L; struct _finddata_t fileinfo;
 	std::string path, filename; list.clear();
 
 	path = file + FileSeparator + "*"; bool dir = false;

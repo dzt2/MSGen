@@ -1,6 +1,7 @@
 #include "cscore.h"
 #include "ctrace.h"
 
+/*
 int main() {
 	// declarations
 	std::string name = "tcas";
@@ -112,3 +113,4 @@ int main() {
 	std::cout << "Press any key to exit..." << std::endl;
 	getchar(); return 0;
 }
+*/

@@ -191,7 +191,7 @@ public:
 
 	/* new-vertex, add-cluster, connect, add-vertex, clear and update roots and leafs */
 	friend class MSGBuilder;
-protected:
+//protected:
 	/* create a new (isolated) vertex in the pool */
 	MSGVertex & new_vertex(const ScoreVector &);
 	/* add mutant in cluster of the node */
@@ -367,8 +367,6 @@ public:
 
 	/* get the hierarchy for analysis */
 	const MuHierarchy & get_hierarchy() const { return hierarchy; }
-private:
-
 
 protected:
 	/* clear the original graph and hierarchy */
