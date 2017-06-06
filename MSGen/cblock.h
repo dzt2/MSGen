@@ -30,21 +30,12 @@ class LocalGraphMerge;
 
 /* block = {coverage; mutations; local-graph; }*/
 class MutBlock {
-protected:
-	/* construct block for mutants with specified coverage */
-	MutBlock(const BitSeq & covvec, MutantSpace & mspace)
-		: coverage(covvec), mutants(), local_graph(mspace) {}
-	/* deconstructor */
-	~MutBlock() { clear_mutants(); }
-
-	/* add a new mutant into the block */
-	void add_mutant(Mutant::ID mid) { mutants.insert(mid); }
-	/* clear all the mutants (including local graph) */
-	void clear_mutants() { local_graph.clear(); mutants.clear(); }
-	/* get local graph for their modification */
-	MSGraph & get_graph_for_modify() { return local_graph; }
-
 public:
+	/* type for block ID */
+	typedef unsigned int ID;
+
+	/* get the id of this block */
+	ID get_block_id() const { return bid; }
 	/* get the coverage of this vector */
 	const BitSeq & get_coverage() const { return coverage; }
 	/* get the set of mutants in block */
@@ -61,7 +52,23 @@ public:
 	/* to construct local MSG */
 	friend class LocalMSGBuilder;
 
+protected:
+	/* construct block for mutants with specified coverage */
+	MutBlock(ID id, const BitSeq & covvec, MutantSpace & mspace)
+		: bid(id), coverage(covvec), mutants(), local_graph(mspace) {}
+	/* deconstructor */
+	~MutBlock() { clear_mutants(); }
+
+	/* add a new mutant into the block */
+	void add_mutant(Mutant::ID mid) { mutants.insert(mid); }
+	/* clear all the mutants (including local graph) */
+	void clear_mutants() { local_graph.clear(); mutants.clear(); }
+	/* get local graph for their modification */
+	MSGraph & get_graph_for_modify() { return local_graph; }
+
 private:
+	/* block id */
+	const ID bid;
 	/* get the coverage of mutant block */
 	const BitSeq coverage;
 	/* get the set of mutations in block */
@@ -140,6 +147,7 @@ public:
 	friend class MutBlockBuilder;
 	/* to new-clear bridges between blocks */
 	friend class MutBlockConnect;
+
 private:
 	/* mutation space where mutants in blocks are defined */
 	MutantSpace & mut_space;
@@ -283,8 +291,6 @@ protected:
 	void build_all_bridges();
 	/* create subsumption between all valid bridges */
 	void build_all_subsume();
-	/* create subsumption for specified bridge */
-	void build_subsume(MutBlockBridge & bridge) { linker.connect(bridge); }
 	/* close the building */
 	void close();
 
