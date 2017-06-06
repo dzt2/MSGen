@@ -128,13 +128,16 @@ MutBlockBridge * MutBlockGraph::new_bridge(MutBlock & src, MutBlock & trg) {
 	MutBlockBridge * bridge = new MutBlockBridge(src, trg);
 	bridges.insert(bridge); return bridge;
 }
-void MutBlockGraph::clear_all() {
-	/* bridges between blocks are deleted at first */
+void MutBlockGraph::clear_bridges() {
 	auto brg_beg = bridges.begin();
 	auto brg_end = bridges.end();
-	while (brg_beg != brg_end) 
+	while (brg_beg != brg_end)
 		delete *(brg_beg++);
 	bridges.clear();
+}
+void MutBlockGraph::clear_all() {
+	/* clear bridges between blocks */
+	this->clear_bridges();
 
 	/* index are cleared */ index.clear();
 
@@ -258,7 +261,254 @@ void LocalMSGBuilder::construct_graphs(MutBlockGraph &bgraph,
 	this->end(); this->close();
 }
 
+void MutBlockConnect::open(MutBlockGraph & bgraph) {
+	close(); graph = &bgraph; 
+	graph->clear_bridges();
+}
+void MutBlockConnect::close() { graph = nullptr; }
+void MutBlockConnect::build_all_bridges() {
+	if (graph == nullptr) return;
+	const std::set<MutBlock *> blocks = graph->get_blocks();
 
+	auto src_beg = blocks.begin(), src_end = blocks.end();
+	while (src_beg != src_end) {
+		/* get next source block */
+		MutBlock & src = *(*(src_beg++));
+		const BitSeq & src_coverage = src.get_coverage();
+		if (src_coverage.all_zeros()) continue;
+
+		auto trg_beg = blocks.begin();
+		auto trg_end = blocks.end();
+		while (trg_beg != trg_end) {
+			/* get next unequal-nodes in graph */
+			MutBlock & trg = *(*(trg_beg++));
+			if ((&src) == (&trg)) continue;
+
+			/* validate whether bridge between blocks */
+			BitSeq inter = trg.get_coverage();
+			inter.conjunct(src_coverage);
+			if (inter.all_zeros()) continue;
+
+			/* create new (empty) bridge between them */
+			graph->new_bridge(src, trg);
+		}
+	}
+}
+void MutBlockConnect::build_all_subsume() {
+	if (graph == nullptr) return;
+	const std::set<MutBlockBridge *> & bridges = graph->get_bridges();
+	auto beg = bridges.begin(), end = bridges.end();
+	while (beg != end) {
+		MutBlockBridge * bridge = *(beg++);
+		this->build_subsume(*bridge);
+	}
+}
+void MutBlockConnect::connect(MutBlockGraph & bgraph) {
+	this->open(bgraph);
+	this->build_all_bridges();
+	this->build_all_subsume();
+	this->close();
+}
+
+void MutBridgeLinker::connect(MutBlockBridge & brg) {
+	this->open(brg);
+	while (!vex_queue.empty()) {
+		MSGVertex * vex = vex_queue.front();
+		vex_queue.pop(); this->link(vex);
+	}
+	this->close();
+}
+void MutBridgeLinker::open(MutBlockBridge & brg) {
+	/* cache for constructing sort-queue */
+	std::queue<MSGVertex *> tqueue;
+	std::set<MSGVertex *> records;
+
+	/* initialization */
+	close(); bridge = &brg;
+
+	/* get leafs and initialize their solutions */
+	const std::set<MSGVertex *> vertices = brg.get_vertices();
+	auto beg = vertices.begin(), end = vertices.end();
+	while (beg != end) {
+		MSGVertex * vertex = *(beg++);
+		if (is_leaf_vertex(vertex, vertices)) {
+			/* initialize its solution for vertex */
+			std::set<MSGVertex *> * solution
+				= new std::set<MSGVertex *>();
+			solutions[vertex] = solution;
+			get_leaf_direct_subsuming(vertex, *solution);
+
+			/* push to queue */ tqueue.push(vertex);
+		}
+	} /* end while: beg != end */
+
+	/* construct sorted-queue for vertices */
+	while (!tqueue.empty()) {
+		/* get next valid node */
+		MSGVertex * x = tqueue.front();
+		records.insert(x); vex_queue.push(x);
+
+		/* get input edges */
+		const std::list<MuSubsume> & edges
+			= x->get_in_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+
+		/* update the tqueue */
+		tqueue.pop();
+		while (beg != end) {
+			/* get next node subsuming the x */
+			const MuSubsume & edge = *(beg++);
+			MSGVertex * y = (MSGVertex *)(&(edge.get_source()));
+
+			if (vertices.count(y) == 0) continue;				/* invalid */
+			else if (records.count(y) > 0) continue;			/* duplicated */
+			else if(is_solvable(y, records)) tqueue.push(y);	/* insert solvable */
+		} /* end while: beg != end */
+	} /* end while: vex_queue */
+
+	/* return */ return;
+}
+void MutBridgeLinker::close() {
+	while (!vex_queue.empty()) vex_queue.pop();
+
+	auto beg = solutions.begin(), end = solutions.end();
+	while (beg != end) delete (beg++)->second;
+	solutions.clear(); bridge = nullptr;
+}
+bool MutBridgeLinker::is_leaf_vertex(MSGVertex * vex, const std::set<MSGVertex *> & vertices) {
+	/* get output edges */
+	const std::list<MuSubsume> & edges 
+			= vex->get_ou_port().get_edges();
+	auto beg = edges.begin(), end = edges.end();
+	while (beg != end) {
+		const MuSubsume & edge = *(beg++);
+		MSGVertex * trg = (MSGVertex *)(&(edge.get_target()));
+		if (vertices.count(trg) != 0) return false;
+	}
+	return true;
+}
+bool MutBridgeLinker::is_solvable(MSGVertex * x, const std::set<MSGVertex *> & records) {
+	/* get output edges */
+	const std::list<MuSubsume> & edges
+		= x->get_ou_port().get_edges();
+	auto beg = edges.begin(), end = edges.end();
+	while (beg != end) {
+		const MuSubsume & edge = *(beg++);
+		MSGVertex * trg = (MSGVertex *)(&(edge.get_target()));
+		if (records.count(trg) == 0) return false;
+	}
+	return true;
+}
+void MutBridgeLinker::get_leaf_direct_subsuming(MSGVertex * leaf, std::set<MSGVertex *> & DS) {
+	/* initialization */
+	const std::set<MSGVertex *> & leafs = bridge->
+		get_target_block().get_local_graph().get_leafs();
+	auto beg = leafs.begin(), end = leafs.end(); DS.clear();
+
+	/* put leafs in DS */
+	while (beg != end) DS.insert(*(beg++));
+}
+void MutBridgeLinker::link(MSGVertex * vex) {
+	/* get the solution of vex for computed */
+	std::set<MSGVertex *> * DS;
+	if (solutions.count(vex) == 0) {
+		DS = new std::set<MSGVertex *>();
+		solutions[vex] = DS;
+	}
+	else {
+		auto iter = solutions.find(vex);
+		DS = iter->second;
+	}
+
+	/* compute and connect DS */
+	initial_direct_subsuming(*vex, *DS);
+	compute_direct_subsuming(*vex, *DS);
+	connect_direct_subsuming(*vex, *DS);
+}
+void MutBridgeLinker::initial_direct_subsuming(MSGVertex & x, std::set<MSGVertex *> & DS) {
+	/* get the output edges for x */
+	const std::list<MuSubsume> & edges 
+		= x.get_ou_port().get_edges();
+	auto beg = edges.begin(), end = edges.end(); 
+	
+	/* iterate all its valid direct children */
+	const std::set<MSGVertex *> & vertices = bridge->get_vertices();
+	while (beg != end) {
+		/* get the next target vertex of x */
+		const MuSubsume & edge = *(beg++);
+		MSGVertex * y = (MSGVertex *)(&(edge.get_target()));
+		if (vertices.count(y) == 0) continue;
+
+		/* get the solution DS for y */
+		auto iter = solutions.find(y);
+		std::set<MSGVertex *> & y_DS = *(iter->second);
+
+		/* add y.DS to x.DS */
+		auto ybeg = y_DS.begin(), yend = y_DS.end();
+		while (ybeg != yend) DS.insert(*(ybeg++));
+	} /* end while: beg != end */
+
+	/* return */ return;
+}
+void MutBridgeLinker::compute_direct_subsuming(MSGVertex & x, std::set<MSGVertex *> & DS) {
+	/* declarations */
+	std::queue<MSGVertex *> vqueue;
+	std::set<MSGVertex *> visits;
+
+	/* initialize the vqueue and visit-set */
+	auto beg = DS.begin(), end = DS.end();
+	while (beg != end) {
+		MSGVertex & y = *(*(beg++));
+		if (subsume(x, y)) {
+			vqueue.push(&y);
+			visits.insert(&y);
+		}
+	}
+	DS.clear();
+
+	/* iterate by BFS */
+	while (!vqueue.empty()) {
+		/* get next unvisited y in queue */
+		MSGVertex & y = *(vqueue.front()); 
+		vqueue.pop();
+		if (visits.count(&y) > 0) continue;
+
+		bool is_directly_subsumed = true; /* assumed y as DS */
+
+		/* iterate y's subsuming mutations */
+		const std::list<MuSubsume> & edges = y.get_in_port().get_edges();
+		auto edge_beg = edges.begin(), edge_end = edges.end();
+		while (edge_beg != edge_end) {
+			/* get next parent (non-compared) */
+			const MuSubsume & edge = *(edge_beg++);
+			MSGVertex * parent = (MSGVertex *)(&(edge.get_source()));
+			if (visits.count(parent) > 0) continue;
+
+			/* insert the parent to the queue by temperary */
+			if (subsume(x, *parent)) {
+				is_directly_subsumed = false;
+				vqueue.push(parent);
+				visits.insert(parent);
+			}
+		} /* end while: edges iteration */
+
+		if (is_directly_subsumed) DS.insert(&y);
+	} /* end while: vqueue */
+
+	/* return */ return;
+}
+void MutBridgeLinker::connect_direct_subsuming(MSGVertex & x, std::set<MSGVertex *> & DS) {
+	auto beg = DS.begin(), end = DS.end();
+	while (beg != end) {
+		MSGVertex & y = *(*(beg++));
+		bridge->links(x, y);
+	}
+}
+bool MutBridgeLinker::subsume(MSGVertex & x, MSGVertex & y) {
+	const BitSeq & xvec = x.get_feature()->get_vector();
+	const BitSeq & yvec = y.get_feature()->get_vector();
+	return xvec.subsume(yvec);
+}
 
 int main() {
 	// initialization
@@ -296,6 +546,7 @@ int main() {
 	// builders 
 	MutBlockBuilder block_builder; 
 	LocalMSGBuilder graph_builder;
+	MutBlockConnect block_connect;
 
 	// get coverage vector
 	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
@@ -330,6 +581,7 @@ int main() {
 		// building blocks
 		block_builder.build_blocks(blocks, cproducer, ccomsumer);
 		graph_builder.construct_graphs(blocks, sproducer, sconsumer);
+		block_connect.connect(blocks);
 
 		// print block information 
 		std::cout << "\t[B]: " << blocks.get_blocks().size() << std::endl;
@@ -342,6 +594,8 @@ int main() {
 			std::cout << "; C = " << local_graph.number_of_vertices();
 			std::cout << " }\n";
 		}
+
+		
 
 		// delete resources
 		delete &blocks;

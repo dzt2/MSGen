@@ -22,10 +22,10 @@
 class MutBlock;
 class MutBlockBridge;
 class MutBlockGraph;
-
 class MutBlockBuilder;
 class LocalMSGBuilder;
 class MutBlockConnect;
+	class MutBridgeLinker;
 class LocalGraphMerge;
 
 /* block = {coverage; mutations; local-graph; }*/
@@ -74,9 +74,7 @@ class MutBlockBridge {
 protected:
 	/* subsumption from nodes in source block to those in target block */
 	MutBlockBridge(const MutBlock & src, const MutBlock & trg)
-		: source(src), target(trg), vertices(), edges() {
-		init();
-	}
+		: source(src), target(trg), vertices(), edges() {}
 	/* deconstructor */
 	~MutBlockBridge() { clear(); }
 
@@ -106,6 +104,8 @@ public:
 
 	/* to create and delete */
 	friend class MutBlockGraph;
+	/* to link subsumption between clusters in different blocks */
+	friend class MutBridgeLinker;
 private:
 	/* source block */
 	const MutBlock & source;
@@ -138,6 +138,8 @@ public:
 
 	/* to new-block, add-index, and clear-all */
 	friend class MutBlockBuilder;
+	/* to new-clear bridges between blocks */
+	friend class MutBlockConnect;
 private:
 	/* mutation space where mutants in blocks are defined */
 	MutantSpace & mut_space;
@@ -155,6 +157,8 @@ protected:
 	void add_index(Mutant::ID, MutBlock *);
 	/* create a new bridge from source to target */
 	MutBlockBridge * new_bridge(MutBlock &, MutBlock &);
+	/* clear all bridges between blocks */
+	void clear_bridges();
 	/* clear all nodes and bridges between blocks */
 	void clear_all();
 };
@@ -211,6 +215,82 @@ private:
 	/* map from block to their builder that construct MSG for their mutants */
 	std::map<MutBlock *, MSGBuilder *> builders;
 };
+/* to create direct subsumption between nodes of two blocks */
+class MutBridgeLinker {
+public:
+	/* to create, delete, connect */
+	friend class MutBlockConnect;
+	/* connect the subsumption between clusters in different bridge */
+	void connect(MutBlockBridge &);
+protected:
+	/* create a linker for connection */
+	MutBridgeLinker() : bridge(nullptr) {}
+	/* deconstructor */
+	~MutBridgeLinker() { close(); }
 
+	/*	1) open another bridge;
+	2) sort (valid) nodes in source block;
+	3) initialize solutions for leafs (leafs in another graph) */
+	void open(MutBlockBridge &);
+	/* link the node with directly subsuming nodes in target block */
+	void link(MSGVertex *);
+	/* close the bridge for blocks */
+	void close();
+private:
 
+	/* the node is "leaf" in valid subgraph when:
+	1) none of its children are not in the set
+	*/
+	bool is_leaf_vertex(MSGVertex *, const std::set<MSGVertex *> &);
+	/* node is solvable, only when all its children have been solved */
+	bool is_solvable(MSGVertex *, const std::set<MSGVertex *> &);
+	/* compute initial DS for each leaf in source block
+	1) all leafs in another MSG of block
+	*/
+	void get_leaf_direct_subsuming(MSGVertex *, std::set<MSGVertex *> &);
 
+	/* initialize the DS with their children's solutions */
+	void initial_direct_subsuming(MSGVertex &, std::set<MSGVertex *> &);
+	/* compute DS for each valid node in source block */
+	void compute_direct_subsuming(MSGVertex &, std::set<MSGVertex *> &);
+	/* connect x to the nodes in set DS */
+	void connect_direct_subsuming(MSGVertex &, std::set<MSGVertex *> &);
+
+	/* whether x subsumes y */
+	bool subsume(MSGVertex &, MSGVertex &);
+
+	/* bridge to be computed */
+	MutBlockBridge * bridge;
+	/* sorted list for solving DS for each valid vertex in source block */
+	std::queue<MSGVertex *> vex_queue;
+	/* solutions for each valid node in source block */
+	std::map<MSGVertex *, std::set<MSGVertex *> *> solutions;
+};
+/* to build up bridges with direct subsumption between blocks */
+class MutBlockConnect {
+public:
+	/* create a builder for bridge between blocks */
+	MutBlockConnect() : graph(nullptr), linker() {}
+	/* deconstructor */
+	~MutBlockConnect() { close(); }
+
+	/* create bridges between graph */
+	void connect(MutBlockGraph &);
+protected:
+	/* open another block-graph */
+	void open(MutBlockGraph &);
+	/* create all (valid) bridges between blocks */
+	void build_all_bridges();
+	/* create subsumption between all valid bridges */
+	void build_all_subsume();
+	/* create subsumption for specified bridge */
+	void build_subsume(MutBlockBridge & bridge) { linker.connect(bridge); }
+	/* close the building */
+	void close();
+
+private:
+	/* graph for mutant blocks */
+	MutBlockGraph * graph;
+	/* linker for subsumption between blocks */
+	MutBridgeLinker linker;
+};
