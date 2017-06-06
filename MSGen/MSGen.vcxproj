@@ -116,7 +116,6 @@
     <ClInclude Include="cerror.h" />
     <ClInclude Include="cfile.h" />
     <ClInclude Include="cmutant.h" />
-    <ClInclude Include="cmutblock.h" />
     <ClInclude Include="cscore.h" />
     <ClInclude Include="cscript.h" />
     <ClInclude Include="ctest.h" />
@@ -126,9 +125,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp" />
+    <ClCompile Include="cblock.cpp" />
     <ClCompile Include="cfile.cpp" />
     <ClCompile Include="cmutant.cpp" />
-    <ClCompile Include="cmutblock.cpp" />
     <ClCompile Include="covmut.cpp" />
     <ClCompile Include="cscore.cpp" />
     <ClCompile Include="cscript.cpp" />

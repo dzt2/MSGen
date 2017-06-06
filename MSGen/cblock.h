@@ -58,6 +58,8 @@ public:
 	friend class MutBlockGraph;
 	/* to add mutant or clear */
 	friend class MutBlockBuilder;
+	/* to construct local MSG */
+	friend class LocalMSGBuilder;
 
 private:
 	/* get the coverage of mutant block */
@@ -118,7 +120,7 @@ private:
 class MutBlockGraph {
 public:
 	/* create an empty block graph in specified mutations */
-	MutBlockGraph(const MutantSpace & mspace) :
+	MutBlockGraph(MutantSpace & mspace) :
 		mut_space(mspace), blocks(), index(), bridges() {}
 	/* deconstructor */
 	~MutBlockGraph() { clear_all(); }
@@ -130,17 +132,19 @@ public:
 	/* whether specified mutant refers to some block */
 	bool has_block_of(Mutant::ID mid) const { return index.count(mid) > 0; }
 	/* get the block of specified mutant */
-	const MutBlock & get_block_of(Mutant::ID) const;
+	MutBlock & get_block_of(Mutant::ID) const;
 	/* get the set of bridges between blocks */
 	const std::set<MutBlockBridge *> & get_bridges() const { return bridges; }
 
+	/* to new-block, add-index, and clear-all */
+	friend class MutBlockBuilder;
 private:
 	/* mutation space where mutants in blocks are defined */
-	const MutantSpace & mut_space;
+	MutantSpace & mut_space;
 	/* set of blocks in the graph */
 	std::set<MutBlock *> blocks;
 	/* index from mutant ID to their block in graph */
-	std::map<Mutant::ID, const MutBlock *> index;
+	std::map<Mutant::ID, MutBlock *> index;
 	/* set of (valid) edge between blocks (with intersection of coverage) */
 	std::set<MutBlockBridge *> bridges;
 
@@ -154,5 +158,59 @@ protected:
 	/* clear all nodes and bridges between blocks */
 	void clear_all();
 };
+
+/* to build the mutation block by coverage (with empty local MSG) */
+class MutBlockBuilder {
+public:
+	/* construct a builder for building mutations in blocks */
+	MutBlockBuilder() : bgraph(nullptr), trie(nullptr) {}
+	/* deconstructor */
+	~MutBlockBuilder() { close(); }
+
+	/* create the block-graph by coverage vectors */
+	void build_blocks(MutBlockGraph &, CoverageProducer &, CoverageConsumer &);
+
+protected:
+	/* open another block graph for building */
+	void open(MutBlockGraph &);
+	/* insert mutant into block by their coverage */
+	void insert(const CoverageVector &);
+	/* close the current graph for building */
+	void close();
+
+private:
+	/* graph for mutation blocks to be built */
+	MutBlockGraph * bgraph;
+	/* binary trie tree */
+	BitTrieTree * trie;
+};
+/* to construct local MSG for each block */
+class LocalMSGBuilder {
+public:
+	/* create builder for local MSG in blocks */
+	LocalMSGBuilder() : graph(nullptr), builders() {}
+	/* deconstructor */
+	~LocalMSGBuilder() { close(); }
+	
+	/* construct the local graph for each block */
+	void construct_graphs(MutBlockGraph &, ScoreProducer &, ScoreConsumer &);
+
+protected:
+	/* open another graph for processed  */
+	void open(MutBlockGraph &);
+	/* create clusters and hierarchy */
+	void build(const ScoreVector &);
+	/* create direct subsumption between clusters */
+	void end();
+	/* close the gragh and clear builers */
+	void close();
+
+private:
+	/* graph for processed */
+	MutBlockGraph * graph;
+	/* map from block to their builder that construct MSG for their mutants */
+	std::map<MutBlock *, MSGBuilder *> builders;
+};
+
 
 

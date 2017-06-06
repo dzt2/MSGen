@@ -28,12 +28,6 @@
     <Filter Include="Source Files\driver">
       <UniqueIdentifier>{d0f7434c-e4d9-4fa7-8aa5-c7ae0cb82aaa}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\parse">
-      <UniqueIdentifier>{a1fcfc88-ea54-4088-9740-dd17fa2d6460}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\parse">
-      <UniqueIdentifier>{4ae50151-4282-4c71-a1b5-d24988a7e55b}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ctext.h">
@@ -65,9 +59,6 @@
     </ClInclude>
     <ClInclude Include="cscript.h">
       <Filter>Header Files\model</Filter>
-    </ClInclude>
-    <ClInclude Include="cmutblock.h">
-      <Filter>Header Files\parse</Filter>
     </ClInclude>
     <ClInclude Include="cblock.h">
       <Filter>Header Files\model</Filter>
@@ -110,8 +101,8 @@
     <ClCompile Include="gentest.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
-    <ClCompile Include="cmutblock.cpp">
-      <Filter>Source Files\parse</Filter>
+    <ClCompile Include="cblock.cpp">
+      <Filter>Source Files\model</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
