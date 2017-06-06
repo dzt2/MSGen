@@ -557,25 +557,62 @@ static void print_blocks(MutBlockGraph & bgraph, std::ostream & out) {
 	auto beg = blocks.begin(), end = blocks.end();
 	while (beg != end) {
 		MutBlock & block = *(*(beg++));	/* get the next block */
-		out << "    Block[" << block.get_block_id() << "]\t{ ";
+		out << "  Block[" << block.get_block_id() << "] = { M: ";
+		out << block.get_mutants().size() << "; C: "
+			<< block.get_local_graph().number_of_vertices()
+			<< "; \tB: " << block.get_coverage().to_string() << " }\n";
 
-		/* mutants */ out << "M: " << block.get_mutants().size() << "; \t";
-		/* cluster */ out << "C: " << block.get_local_graph().number_of_vertices() << "; \t";
-		/* subsume */ out << "S: " << number_of_edges(block.get_local_graph()) << "; \t";
-		/* leafs */ out << "L: " << block.get_local_graph().get_leafs().size() << " }\n";
+		const MSGraph & graph = block.get_local_graph();
+		MSGVertex::ID vid = 0, vnum = graph.number_of_vertices();
+		out << "  /================== Vertex =================/\n";
+		while (vid < vnum) {
+			MSGVertex & vex = graph.get_vertex(vid);
+			out << "\tV[" << vid << "] = { M: " << vex.get_cluster().number_of_mutants();
+			out << "; \tB: " << vex.get_feature()->get_vector().to_string() << " }\n";
+			vid++;
+		}
+
+		out << "\n  /================== Edges =================/\n";
+		for (vid = 0; vid < vnum; vid++) {
+			MSGVertex & vex = graph.get_vertex(vid);
+			const std::list<MuSubsume> & edges = vex.get_ou_port().get_edges();
+			auto ebeg = edges.begin(), eend = edges.end();
+			while (ebeg != eend) {
+				const MuSubsume & edge = *(ebeg++);
+				out << "\tSubsume { " << edge.get_source().get_id();
+				out << ", " << edge.get_target().get_id() << " }\n";
+			}
+		}
+		out << "\n\n";
 	}
 
-	/* print bridges */
 	const std::set<MutBlockBridge *> & bridges = bgraph.get_bridges();
+	out << "There are " << bridges.size() << " bridges.\n";
 	auto bbeg = bridges.begin(), bend = bridges.end();
-	out << "\nThere are " << bridges.size() << " bridges.\n";
 	while (bbeg != bend) {
 		MutBlockBridge & bridge = *(*(bbeg++));
-		out << "    Bridge[" << bridge.get_source_block().get_block_id()
-			<< " --> " << bridge.get_target_block().get_block_id() << "]: \t{ ";
+		out << "  Bridge [ " << bridge.get_source_block().get_block_id();
+		out << ", " << bridge.get_target_block().get_block_id() << " ]\n";
 
-		out << "V: " << bridge.get_vertices().size() << "; \t";
-		out << "E: " << number_of_edges(bridge) << " }\n";
+		const std::set<MSGVertex *> & vertices = bridge.get_vertices();
+		auto vbeg = vertices.begin(), vend = vertices.end();
+		while (vbeg != vend) {
+			MSGVertex & vertex = *(*(vbeg++));
+			out << "\tVertex[" << vertex.get_id() << "]: ";
+			if (bridge.has_edges(vertex)) {
+				const std::list<MuSubsume> & inter_edges = bridge.get_edges_of(vertex);
+				auto inter_beg = inter_edges.begin(), inter_end = inter_edges.end();
+				while (inter_beg != inter_end) {
+					const MuSubsume & inter_edge = *(inter_beg++);
+					out << inter_edge.get_target().get_id() << "; ";
+				}
+			}
+			else {
+				out << "nil";
+			}
+			out << "\n";
+		}
+		out << "\n";
 	}
 
 	out << std::endl;
@@ -584,7 +621,7 @@ static void print_blocks(MutBlockGraph & bgraph, std::ostream & out) {
 
 int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "triangle";
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "prime";
 	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
@@ -656,7 +693,8 @@ int main() {
 		block_connect.connect(blocks);
 
 		// print block information 
-		print_blocks(blocks, std::cout);
+		std::ofstream fout(prefix + prname + "/bgraph.txt");
+		print_blocks(blocks, fout); fout.close();
 
 		// delete resources
 		delete &blocks;
