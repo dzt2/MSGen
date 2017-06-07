@@ -267,6 +267,11 @@ private:
 	/* whether x subsumes y */
 	bool subsume(MSGVertex &, MSGVertex &);
 
+	/* copy the nodes from src to trg */
+	void copy(std::set<MSGVertex *> &, std::set<MSGVertex *> &);
+	/* compute the sub-set by src = src - trg*/
+	void sub(std::set<MSGVertex *> &, std::set<MSGVertex *> &);
+
 	/* bridge to be computed */
 	MutBlockBridge * bridge;
 	/* sorted list for solving DS for each valid vertex in source block */

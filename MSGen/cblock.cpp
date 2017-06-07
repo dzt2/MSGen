@@ -164,6 +164,9 @@ void MutBlockBuilder::close() {
 }
 void MutBlockBuilder::insert(const CoverageVector & cvector) {
 	if (bgraph != nullptr) {
+		/* remove invalid coverage */
+		if (cvector.get_coverage().all_zeros()) return;
+
 		/* get the leaf where block is inserted */
 		BitTrie * leaf = trie->insert_vector(cvector.get_coverage());
 		
@@ -410,7 +413,7 @@ void MutBridgeLinker::get_leaf_direct_subsuming(MSGVertex * leaf, std::set<MSGVe
 }
 void MutBridgeLinker::link(MSGVertex * vex) {
 	/* get the solution of vex for computed */
-	std::set<MSGVertex *> * DS;
+	std::set<MSGVertex *> * DS, seed;
 	if (solutions.count(vex) == 0) {
 		DS = new std::set<MSGVertex *>();
 		solutions[vex] = DS;
@@ -456,6 +459,7 @@ void MutBridgeLinker::compute_direct_subsuming(MSGVertex & x, std::set<MSGVertex
 	std::set<MSGVertex *> qset, nonsubsume, subsuming;
 
 	/* initialize the vqueue and visit-set */
+	qset.clear(); nonsubsume.clear(); subsuming.clear();
 	auto beg = DS.begin(), end = DS.end();
 	while (beg != end) {
 		MSGVertex & y = *(*(beg++));
@@ -467,12 +471,9 @@ void MutBridgeLinker::compute_direct_subsuming(MSGVertex & x, std::set<MSGVertex
 	DS.clear();
 
 	/* iterate by BFS */
-	//std::cerr << "\t~~~" << vqueue.size() << "\n";
 	while (!vqueue.empty()) {
 		/* get next unvisited y in queue */
 		MSGVertex & y = *(vqueue.front()); vqueue.pop();
-		if (nonsubsume.count(&y) > 0) continue;
-		else if (subsuming.count(&y) > 0) continue;
 
 		bool direct_subsumed = true; /* assumed y as DS */
 
@@ -489,7 +490,6 @@ void MutBridgeLinker::compute_direct_subsuming(MSGVertex & x, std::set<MSGVertex
 			else if (subsuming.count(parent) > 0) {
 				direct_subsumed = false;
 			}
-			/* for unvisited parent */
 			else {
 				if (subsume(x, *parent)) {
 					subsuming.insert(parent);
@@ -513,6 +513,20 @@ void MutBridgeLinker::compute_direct_subsuming(MSGVertex & x, std::set<MSGVertex
 		if (direct_subsumed) DS.insert(&y);
 	} /* end while: vqueue */
 
+	/* removing all nodes subsumed by its children */
+	const std::list<MuSubsume> & outs = x.get_ou_port().get_edges();
+	const std::set<MSGVertex *> & vertices = bridge->get_vertices();
+	auto cbeg = outs.begin(), cend = outs.end();
+	while (cbeg != cend) {
+		const MuSubsume & edge = *(cbeg++);
+		MSGVertex * y = (MSGVertex *)(&(edge.get_target()));
+		if (vertices.count(y) == 0) continue;
+
+		auto iter = solutions.find(y);
+		std::set<MSGVertex *> * DS_y = iter->second;
+		this->sub(DS, *DS_y);
+	}
+
 	/* return */ return;
 }
 void MutBridgeLinker::connect_direct_subsuming(MSGVertex & x, std::set<MSGVertex *> & DS) {
@@ -526,6 +540,18 @@ bool MutBridgeLinker::subsume(MSGVertex & x, MSGVertex & y) {
 	const BitSeq & xvec = x.get_feature()->get_vector();
 	const BitSeq & yvec = y.get_feature()->get_vector();
 	return xvec.subsume(yvec);
+}
+void MutBridgeLinker::copy(std::set<MSGVertex *> & src, std::set<MSGVertex *> & trg) {
+	trg.clear();
+	auto beg = src.begin(), end = src.end();
+	while (beg != end) trg.insert(*(beg++));
+}
+void MutBridgeLinker::sub(std::set<MSGVertex *> & src, std::set<MSGVertex *> & subs) {
+	auto beg = subs.begin(), end = subs.end();
+	while (beg != end) {
+		MSGVertex * node = *(beg++);
+		if (src.count(node) > 0)src.erase(node);
+	}
 }
 
 unsigned int number_of_edges(const MSGraph & graph) {
@@ -618,10 +644,66 @@ static void print_blocks(MutBlockGraph & bgraph, std::ostream & out) {
 	out << std::endl;
 	/* return */ return;
 }
+/* statistic analysis on output stream */
+static void analysis_blocks(MutBlockGraph & bgraph, std::ostream & out) {
+	const std::set<MutBlock *> & blocks = bgraph.get_blocks();
+	auto beg = blocks.begin(), end = blocks.end();
 
+	out << "Total Statistics on Mutation Blocks\nBlock\t#Mutants\t#Clusters\t#Subsume\n";
+	while (beg != end) {
+		MutBlock & block = *(*(beg++));
+		const MSGraph & graph = block.get_local_graph();
+
+		out << block.get_block_id() << '\t';
+		out << block.get_mutants().size() << "\t";
+		out << graph.number_of_vertices() << "\t";
+		out << number_of_edges(graph) << "\n";
+	}
+	out << std::endl;
+
+}
+/* statistical analysis on bridges between blocks */
+static void analysis_bridges(MutBlockGraph & bgraph, std::ostream & out) {
+	const std::set<MutBlockBridge *> & bridges = bgraph.get_bridges();
+	auto beg = bridges.begin(), end = bridges.end();
+	
+	out << "Total Statistics on Mutation Bridges\nSource\tTarget\tSubsume?\t#Src_Vertex\t#Sub_Vertex\t#Edges\t#Equivalent\t#Strict\n";
+	while (beg != end) {
+		/* analysis on summary */
+		MutBlockBridge & bridge = *(*(beg++));
+		out << bridge.get_source_block().get_block_id() << "\t";
+		out << bridge.get_target_block().get_block_id() << "\t";
+		out << bridge.get_source_block().get_coverage().subsume(bridge.get_target_block().get_coverage()) << "\t";
+		out << bridge.get_vertices().size() << "\t";
+		
+		/* analysis on edges */
+		const std::set<MSGVertex *> & vertices = bridge.get_vertices();
+		auto vbeg = vertices.begin(), vend = vertices.end(); 
+		size_t eq = 0, st = 0, sv = 0;
+		while (vbeg != vend) {
+			MSGVertex & vex = *(*(vbeg++));
+			if (bridge.has_edges(vex)) {
+				const std::list<MuSubsume> & edges = bridge.get_edges_of(vex);
+				auto ebeg = edges.begin(), eend = edges.end();
+				while (ebeg != eend) {
+					const MuSubsume & edge = *(ebeg++);
+					const BitSeq & svec = edge.get_source().get_feature()->get_vector();
+					const BitSeq & tvec = edge.get_target().get_feature()->get_vector();
+					if (svec.equals(tvec)) eq++;
+					else st++;
+				}
+				sv++;
+			}
+		}	/* end while: vbeg != vend */
+		out << sv << "\t" << (st + eq) << "\t" << eq << "\t" << st << "\n";
+	} /* end while: beg != end */
+	out << std::endl;
+}
+
+/* main tester */
 int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "prime";
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "profit";
 	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
@@ -695,6 +777,10 @@ int main() {
 		// print block information 
 		std::ofstream fout(prefix + prname + "/bgraph.txt");
 		print_blocks(blocks, fout); fout.close();
+		std::ofstream bout(prefix + prname + "/blocks.txt");
+		analysis_blocks(blocks, bout); bout.close();
+		std::ofstream lout(prefix + prname + "/bridges.txt");
+		analysis_bridges(blocks, lout); lout.close();
 
 		// delete resources
 		delete &blocks;

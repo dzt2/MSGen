@@ -505,6 +505,9 @@ bool MSGBuilder::build(MSGraph & graph, ScoreProducer & producer, ScoreConsumer 
 	return true;
 }
 void MSGBuilder::add_score_vector(const ScoreVector & svec) {
+	/* remove invalid score-vector */
+	if (svec.get_vector().all_zeros()) return;
+
 	/* insert the vector into bit-trie */
 	BitTrie * leaf = trie->insert_vector(svec.get_vector());
 
