@@ -60,7 +60,7 @@
     <ClInclude Include="cscript.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
-    <ClInclude Include="cblock.h">
+    <ClInclude Include="mblock.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
   </ItemGroup>
@@ -100,9 +100,6 @@
     </ClCompile>
     <ClCompile Include="gentest.cpp">
       <Filter>Source Files\driver</Filter>
-    </ClCompile>
-    <ClCompile Include="cblock.cpp">
-      <Filter>Source Files\model</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

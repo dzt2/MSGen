@@ -112,7 +112,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="bitseq.h" />
-    <ClInclude Include="cblock.h" />
     <ClInclude Include="cerror.h" />
     <ClInclude Include="cfile.h" />
     <ClInclude Include="cmutant.h" />
@@ -121,11 +120,11 @@
     <ClInclude Include="ctest.h" />
     <ClInclude Include="ctext.h" />
     <ClInclude Include="ctrace.h" />
+    <ClInclude Include="mblock.h" />
     <ClInclude Include="msgraph.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp" />
-    <ClCompile Include="cblock.cpp" />
     <ClCompile Include="cfile.cpp" />
     <ClCompile Include="cmutant.cpp" />
     <ClCompile Include="covmut.cpp" />
