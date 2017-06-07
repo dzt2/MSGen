@@ -365,7 +365,7 @@ void MutBridgeLinker::open(MutBlockBridge & brg) {
 
 			if (vertices.count(y) == 0) continue;				/* invalid */
 			else if (records.count(y) > 0) continue;			/* duplicated */
-			else if(is_solvable(y, records)) tqueue.push(y);	/* insert solvable */
+			else if(is_solvable(y, records, vertices)) tqueue.push(y);	/* insert solvable */
 		} /* end while: beg != end */
 	} /* end while: vex_queue */
 
@@ -390,7 +390,8 @@ bool MutBridgeLinker::is_leaf_vertex(MSGVertex * vex, const std::set<MSGVertex *
 	}
 	return true;
 }
-bool MutBridgeLinker::is_solvable(MSGVertex * x, const std::set<MSGVertex *> & records) {
+bool MutBridgeLinker::is_solvable(MSGVertex * x, const std::set<MSGVertex *> & records, 
+	const std::set<MSGVertex *> & vertices) {
 	/* get output edges */
 	const std::list<MuSubsume> & edges
 		= x->get_ou_port().get_edges();
@@ -398,6 +399,7 @@ bool MutBridgeLinker::is_solvable(MSGVertex * x, const std::set<MSGVertex *> & r
 	while (beg != end) {
 		const MuSubsume & edge = *(beg++);
 		MSGVertex * trg = (MSGVertex *)(&(edge.get_target()));
+		if (vertices.count(trg) == 0) continue;
 		if (records.count(trg) == 0) return false;
 	}
 	return true;
@@ -703,7 +705,7 @@ static void analysis_bridges(MutBlockGraph & bgraph, std::ostream & out) {
 /* main tester */
 int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "profit";
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "triangle";
 	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project

@@ -250,8 +250,8 @@ private:
 	1) none of its children are not in the set
 	*/
 	bool is_leaf_vertex(MSGVertex *, const std::set<MSGVertex *> &);
-	/* node is solvable, only when all its children have been solved */
-	bool is_solvable(MSGVertex *, const std::set<MSGVertex *> &);
+	/* node is solvable, only when all its children have been solved (in vertices) */
+	bool is_solvable(MSGVertex *, const std::set<MSGVertex *> &, const std::set<MSGVertex *> &);
 	/* compute initial DS for each leaf in source block
 	1) all leafs in another MSG of block
 	*/
