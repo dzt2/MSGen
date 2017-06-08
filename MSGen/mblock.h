@@ -302,6 +302,8 @@ private:
 	bool is_solvable(MSGVertex *, const std::set<MSGVertex *> &, const std::set<MSGVertex *> &);
 	/* add all nodes in source to the target */
 	void add_all(std::set<MSGVertex *> &, std::set<MSGVertex *> &);
+	/* a = a - b */
+	void sub_set(std::set<MSGVertex *> &, std::set<MSGVertex *> &);
 	/* whether x subsumes y */
 	bool subsume(MSGVertex &, MSGVertex &);
 };

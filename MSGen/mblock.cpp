@@ -228,10 +228,6 @@ void LocalMSGBuilder::construct_local_graph(MutBlockGraph & bgraph,
 	this->end(); this->close();
 }
 
-void MutBlockConnect::open(MutBlockGraph & bgraph) {
-	close(); graph = &bgraph;
-}
-void MutBlockConnect::close() { graph = nullptr; }
 void MutBlockConnect::connect(MutBlockGraph & bgraph) {
 	MutBlock::ID bid = 0, bnum = bgraph.number_of_blocks();
 
@@ -243,6 +239,9 @@ void MutBlockConnect::connect(MutBlockGraph & bgraph) {
 	}
 	this->close();
 }
+void MutBlockConnect::open(MutBlockGraph & bgraph) {
+	close(); graph = &bgraph;
+}
 void MutBlockConnect::init_connection() {
 	MutBlock::ID i, j, num = graph->number_of_blocks();
 	for (i = 0; i < num; i++) {
@@ -252,8 +251,9 @@ void MutBlockConnect::init_connection() {
 		for (j = 0; j < num; j++) {
 			if (i == j) continue;
 			MutBlock & bj = graph->get_block(j);
-			const BitSeq & covj = bj.get_coverage();
-			if (covi.subsume(covj)) 
+			BitSeq  covj = bj.get_coverage();
+			covj.conjunct(covi);
+			if (!covj.all_zeros()) 
 				bi.link_to_block(bj);
 		}
 	}
@@ -286,6 +286,7 @@ void MutBlockConnect::build_up_port(BlockPort & port) {
 	MutPortComputer linker(port);
 	linker.compute();
 }
+void MutBlockConnect::close() { graph = nullptr; }
 
 MutPortComputer::~MutPortComputer() {
 	while (!questions.empty()) questions.pop();
@@ -355,11 +356,14 @@ void MutPortComputer::open_questions() {
 			while (ebeg != eend) {
 				const MuSubsume & edge = *(ebeg++);
 				MSGVertex * parent = (MSGVertex *)(&(edge.get_source()));
-				if (is_solvable(parent, visits, valid_nodes)) {
+				if (visits.count(parent) > 0) continue;
+				else if (is_solvable(parent, visits, valid_nodes)) {
 					qlist.push(parent); visits.insert(parent);
 				}
 			}
 		} /* end while: qlist.empty() */
+
+		/* clear solutions */ solutions.clear();
 	}
 }
 void MutPortComputer::initial_subsumption(MSGVertex * x, std::set<MSGVertex *> & DS) {
@@ -415,7 +419,7 @@ void MutPortComputer::compute_subsumption(MSGVertex * x, std::set<MSGVertex *> &
 
 		/* get nodes subsuming y in target block */
 		const std::list<MuSubsume> & edges 
-			= y->get_ou_port().get_edges();
+			= y->get_in_port().get_edges();
 		auto edge_beg = edges.begin();
 		auto edge_end = edges.end();
 		while (edge_beg != edge_end) {
@@ -452,6 +456,19 @@ void MutPortComputer::compute_subsumption(MSGVertex * x, std::set<MSGVertex *> &
 		/* directly subsumed */
 		if (direct_subsume) DS.insert(y);
 	} /* end while: */
+
+	/* remove all those subsumed by its children */
+	const std::list<MuSubsume> & out_edges = x->get_ou_port().get_edges();
+	auto out_beg = out_edges.begin(), out_end = out_edges.end();
+	while (out_beg != out_end) {
+		const MuSubsume & edge = *(out_beg++);
+		MSGVertex * child = (MSGVertex *)(&(edge.get_target()));
+		if (solutions.count(child) > 0) {
+			auto iter = solutions.find(child);
+			std::set<MSGVertex *> * SDS = iter->second;
+			this->sub_set(DS, *SDS);
+		}
+	}
 
 	/* return */ return;
 }
@@ -498,6 +515,13 @@ void MutPortComputer::add_all(std::set<MSGVertex *> & src, std::set<MSGVertex *>
 	auto end = src.end();
 	while (beg != end) 
 		trg.insert(*(beg++));
+}
+void MutPortComputer::sub_set(std::set<MSGVertex *> & a, std::set<MSGVertex *> & b) {
+	auto beg = b.begin(), end = b.end();
+	while (beg != end) {
+		MSGVertex * vex = *(beg++);
+		if (a.count(vex) > 0) a.erase(vex);
+	}
 }
 bool MutPortComputer::subsume(MSGVertex & x, MSGVertex & y) {
 	const BitSeq & xv = x.get_feature()->get_vector();
