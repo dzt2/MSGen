@@ -368,7 +368,7 @@ void MutPortComputer::open_questions() {
 }
 void MutPortComputer::initial_subsumption(MSGVertex * x, std::set<MSGVertex *> & DS) {
 	/* initial seed for leaf is the subsumed leaf of another MSG in target block */
-	if (leafs.count(x) > 0) {
+	/*if (leafs.count(x) > 0) {
 		const std::set<MSGVertex *> & msg_leafs
 			= port.get_target_block().get_local_graph().get_leafs();
 		const BitSeq & xvec = x->get_feature()->get_vector();
@@ -379,9 +379,9 @@ void MutPortComputer::initial_subsumption(MSGVertex * x, std::set<MSGVertex *> &
 			const BitSeq & yvec = y->get_feature()->get_vector();
 			if (xvec.subsume(yvec)) DS.insert(y);
 		}
-	}
+	}*/
 	/* initial seed for non-leaf is the solution by its valid targets */
-	else {
+	/*else {
 		const std::list<MuSubsume> & edges = x->get_ou_port().get_edges();
 		const std::set<MSGVertex *> & valid_nodes = port.get_valid_nodes();
 
@@ -390,11 +390,22 @@ void MutPortComputer::initial_subsumption(MSGVertex * x, std::set<MSGVertex *> &
 			const MuSubsume & edge = *(edge_beg++);
 			MSGVertex * y = (MSGVertex *)(&(edge.get_target()));
 			if (valid_nodes.count(y) == 0) continue;
-			
+
 			auto iter = solutions.find(y);
 			std::set<MSGVertex *> * y_DS = iter->second;
 			this->add_all(*y_DS, DS);
 		}
+	}*/
+
+	const std::set<MSGVertex *> & msg_leafs
+		= port.get_target_block().get_local_graph().get_leafs();
+	const BitSeq & xvec = x->get_feature()->get_vector();
+
+	auto beg = msg_leafs.begin(), end = msg_leafs.end();
+	while (beg != end) {
+		MSGVertex * y = *(beg++);
+		const BitSeq & yvec = y->get_feature()->get_vector();
+		if (xvec.subsume(yvec)) DS.insert(y);
 	}
 }
 void MutPortComputer::compute_subsumption(MSGVertex * x, std::set<MSGVertex *> & DS) {
@@ -677,6 +688,49 @@ static void analysis_ports(MutBlockGraph & bgraph, std::ostream & out) {
 	out << std::endl;
 }
 
+/* validate */
+static void validate_equivalence(MutBlockGraph & bgraph) {
+	MutBlock::ID bid = 0, bnum = bgraph.number_of_blocks();
+	while (bid < bnum) {
+		/* get next block for validation */
+		MutBlock & block = bgraph.get_block(bid++);
+		const std::map<MutBlock *, BlockPort *> & ports = block.get_ports();
+		std::cerr << "Block #" << bid - 1 << "\n";
+
+		auto beg = ports.begin(), end = ports.end();
+		while (beg != end) {
+			/* get next port */
+			BlockPort & port = *((beg++)->second); 
+			MutBlock::ID tid = port.get_target_block().get_block_id();
+			const std::set<MSGVertex *> & valid_nodes = port.get_valid_nodes();
+
+			/* validate its equivalence */
+			auto node_beg = valid_nodes.begin();
+			auto node_end = valid_nodes.end();
+			while (node_beg != node_end) {
+				const std::list<MuSubsume> & edges = 
+					port.get_direct_subsumption(*(*(node_beg++)));
+
+				auto edge_beg = edges.begin();
+				auto edge_end = edges.end();
+				while (edge_beg != edge_end) {
+					const MuSubsume & edge = *(edge_beg++);
+					const MSGVertex & x = edge.get_source();
+					const MSGVertex & y = edge.get_target();
+					const BitSeq & xvec = x.get_feature()->get_vector();
+					const BitSeq & yvec = y.get_feature()->get_vector();
+
+					if (xvec.equals(yvec)) {
+						std::cerr << "\tB" << bid - 1 << "[" << x.get_id() << "] --> B" << tid << "[" << y.get_id() << "]\n";
+					}
+				}
+			}
+		}
+		std::cerr << std::endl;
+	}
+	
+}
+
 int main() { 
 	// initialization
 	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "prime";
@@ -757,6 +811,9 @@ int main() {
 		analysis_blocks(blocks, bout); bout.close();
 		std::ofstream lout(prefix + prname + "/bridges.txt");
 		analysis_ports(blocks, lout); lout.close();
+
+		// validation 
+		validate_equivalence(blocks);
 
 		// delete resources
 		delete &blocks;
