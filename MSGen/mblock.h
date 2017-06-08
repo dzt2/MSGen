@@ -70,7 +70,7 @@ private:
 	/* set of mutants in this block */
 	std::set<Mutant::ID> mutants;
 	/* local mutant subsumption graph */
-	MSGraph & local_graph;
+	MSGraph local_graph;
 	/* ports to target blocks in this block */
 	std::map<MutBlock *, BlockPort *> ports;
 
@@ -120,8 +120,8 @@ public:
 		1) there are vertices in another block subsumed by it 
 	*/
 	const std::set<MSGVertex *> & get_valid_nodes() const { return valid_nodes; }
-	/* get the nodes directly subsumed, by source node, in target block */
-	std::list<MuSubsume> & get_subsume_nodes(MSGVertex &) const;
+	/* get the direct subsumption, from source node, to target block */
+	const std::list<MuSubsume> & get_direct_subsumption(MSGVertex &) const;
 	
 	/* create and delete */
 	friend class MutBlock;
@@ -142,7 +142,7 @@ private:
 class MutBlockGraph {
 public:
 	/* create block graph for specified mutants in space */
-	MutBlockGraph(MutantSpace &);
+	MutBlockGraph(MutantSpace & space) : mspace(space), blocks(), index() {}
 	/* deconstructor */
 	~MutBlockGraph() { clear(); }
 
@@ -187,7 +187,7 @@ protected:
 class MutBlockBuilder {
 public:
 	/* create an empty builder for blocks */
-	MutBlockBuilder();
+	MutBlockBuilder() : graph(nullptr), trie(nullptr) {}
 	/* deconstructor */
 	~MutBlockBuilder() { close(); }
 
@@ -195,7 +195,7 @@ public:
 	void build_blocks(MutBlockGraph &, CoverageProducer &, CoverageConsumer &);
 
 protected:
-	/* open to the graph */
+	/* open the builder for specified graph */
 	void open(MutBlockGraph &);
 	/* build block for the next coverage vector */
 	void build(const CoverageVector &);
@@ -212,7 +212,7 @@ private:
 class LocalMSGBuilder {
 public:
 	/* create an empty builder for local MSG */
-	LocalMSGBuilder();
+	LocalMSGBuilder() : graph(nullptr), builders() {}
 	/* deconstructor */
 	~LocalMSGBuilder() { close(); }
 
@@ -223,7 +223,9 @@ protected:
 	/* open next graph for constructing */
 	void open(MutBlockGraph &);
 	/* create local graph for next score vector */
-	void construct(const ScoreVector &);
+	void add(const ScoreVector &);
+	/* end to add score vector (this will build the edges between mutants) */
+	void end();
 	/* close the builder */
 	void close();
 
@@ -231,23 +233,25 @@ private:
 	/* blocks in the graph to be constructed */
 	MutBlockGraph * graph;
 	/* to build local MSG */
-	MSGBuilder builder;
+	std::map<MutBlock *, MSGBuilder *> builders;
 };
 /* To connect blocks */
 class MutBlockConnect {
 public:
 	/* create an empty connect */
-	MutBlockConnect();
+	MutBlockConnect() : graph(nullptr) {}
 	/* deconstructor */
 	~MutBlockConnect() { close(); }
-	
 	/* link the blocks and subsumption in graph */
 	void connect(MutBlockGraph &);
+
 protected:
 	/* open next graph for connecting */
 	void open(MutBlockGraph &);
 	/* create initial connection (and their valid nodes) between blocks (with intersection) */
 	void init_connection();
+	/* build up the ports for the block (initial, compute subsumption, and */
+	void build_up_ports(MutBlock &);
 	/* compute the subsumption and update its valid nodes in port */
 	void build_up_port(BlockPort &);
 	/* close the connector */
@@ -256,19 +260,48 @@ protected:
 private:
 	/* blocks in the graph to be constructed */
 	MutBlockGraph * graph;
-	/* to compute nodes and subsumption for bridge */
-	MutPortComputer * linker;
 };
 /* to compute the valid nodes and subsumption in port */
 class MutPortComputer {
+public:
+	/* to compute subsumption */
+	friend class MutBlockConnect;
 protected:
-	MutPortComputer(BlockPort &);
+	/* compute DS for valid nodes in port */
+	MutPortComputer(BlockPort & p) : port(p), 
+		questions(), solutions(), leafs() { port.init(); }
+	/* deconstructor */
 	~MutPortComputer();
+	/* compute the subsumption for all questions in port */
+	void compute();
 
-	// TODO...
+private:
+	/* port to be computed */
+	BlockPort & port;
+	/* queue for questions in port */
+	std::queue<MSGVertex *> questions;
+	/* map from node to its DS in port */
+	std::map<MSGVertex *, std::set<MSGVertex *> *> solutions;
+	/* leafs for valid node graph in source block */
+	std::set<MSGVertex *> leafs;
+
+	/* initial the sequence of questions in the queue and clear solution space */
+	void open_questions();
+	/* initialize DS for x */
+	void initial_subsumption(MSGVertex *, std::set<MSGVertex *> &);
+	/* compute DS for x from initial seed */
+	void compute_subsumption(MSGVertex *, std::set<MSGVertex *> &);
+	/* connect the x to nodes of DS in the port */
+	void connect_subsumption(MSGVertex *, std::set<MSGVertex *> &);
+	/* update valid nodes in port, after solving all questions */
+	void close_questions();
+
+	/* whether the node is leaf in valid node graph */
+	bool is_leaf(MSGVertex *, const std::set<MSGVertex *> &);
+	/* node x is solvable, only when all x's "valid" targets have been "solved" in visits */
+	bool is_solvable(MSGVertex *, const std::set<MSGVertex *> &, const std::set<MSGVertex *> &);
+	/* add all nodes in source to the target */
+	void add_all(std::set<MSGVertex *> &, std::set<MSGVertex *> &);
+	/* whether x subsumes y */
+	bool subsume(MSGVertex &, MSGVertex &);
 };
-
-
-
-
-

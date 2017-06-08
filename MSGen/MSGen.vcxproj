@@ -134,6 +134,7 @@
     <ClCompile Include="ctext.cpp" />
     <ClCompile Include="ctrace.cpp" />
     <ClCompile Include="gentest.cpp" />
+    <ClCompile Include="mblock.cpp" />
     <ClCompile Include="msgbuild.cpp" />
     <ClCompile Include="msgraph.cpp" />
   </ItemGroup>

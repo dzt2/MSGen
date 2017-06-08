@@ -101,5 +101,8 @@
     <ClCompile Include="gentest.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
+    <ClCompile Include="mblock.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
