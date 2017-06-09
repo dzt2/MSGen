@@ -28,6 +28,12 @@
     <Filter Include="Source Files\driver">
       <UniqueIdentifier>{d0f7434c-e4d9-4fa7-8aa5-c7ae0cb82aaa}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\graph">
+      <UniqueIdentifier>{6fd63819-c409-481b-a0e2-67d700ab98ef}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\graph">
+      <UniqueIdentifier>{30642e7e-a09b-4cad-b618-57676dc98ea9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ctext.h">
@@ -51,17 +57,17 @@
     <ClInclude Include="ctrace.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
-    <ClInclude Include="msgraph.h">
-      <Filter>Header Files\model</Filter>
-    </ClInclude>
     <ClInclude Include="cscore.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
     <ClInclude Include="cscript.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
+    <ClInclude Include="msgraph.h">
+      <Filter>Header Files\graph</Filter>
+    </ClInclude>
     <ClInclude Include="mblock.h">
-      <Filter>Header Files\model</Filter>
+      <Filter>Header Files\graph</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -89,9 +95,6 @@
     <ClCompile Include="ctrace.cpp">
       <Filter>Source Files\model</Filter>
     </ClCompile>
-    <ClCompile Include="msgraph.cpp">
-      <Filter>Source Files\model</Filter>
-    </ClCompile>
     <ClCompile Include="covmut.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
@@ -102,7 +105,10 @@
       <Filter>Source Files\driver</Filter>
     </ClCompile>
     <ClCompile Include="mblock.cpp">
-      <Filter>Source Files\model</Filter>
+      <Filter>Source Files\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="msgraph.cpp">
+      <Filter>Source Files\graph</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

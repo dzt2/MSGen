@@ -653,49 +653,52 @@ static void analysis_blocks(MutBlockGraph & bgraph, std::ostream & out) {
 	}
 	out << std::endl;
 }
+/* statistic analysis on single port */
+static void analysis_port(BlockPort & port, std::ostream & out) {
+	out << port.get_source_block().get_block_id() << "\t";
+	out << port.get_target_block().get_block_id() << "\t";
+	out << port.get_source_block().get_local_graph().number_of_vertices() << "\t";
+	out << port.get_valid_nodes().size() << "\t";
+	out << port.get_target_block().get_local_graph().number_of_vertices() << "\t";
+
+	size_t ss = 0, es = 0; std::set<MSGVertex *> VVY;
+	const std::set<MSGVertex *> & valid_nodes = port.get_valid_nodes();
+	for (auto beg = valid_nodes.begin(),
+		end = valid_nodes.end(); beg != end; beg++) {
+		const std::list<MuSubsume> & edges = port.get_direct_subsumption(*(*beg));
+		for (auto ebeg = edges.begin(), eend = edges.end(); ebeg != eend; ebeg++) {
+			const MuSubsume & edge = *ebeg;
+			MSGVertex & source = (MSGVertex &)(edge.get_source());
+			MSGVertex & target = (MSGVertex &)(edge.get_target());
+			VVY.insert(&target);
+
+			if (source.get_feature()->get_vector().equals(target.get_feature()->get_vector())) {
+				es++;
+			}
+			else ss++;
+		}
+	}
+
+	out << VVY.size() << "\t" << (es + ss) << "\t" << es << "\t" << ss << "\t";
+	out << port.get_source_block().get_coverage().subsume(port.get_target_block().get_coverage()) << "\n";
+}
 /* statistical analysis on bridges between blocks */
 static void analysis_ports(MutBlockGraph & bgraph, std::ostream & out) {
-	MutBlock::ID bid = 0, bnum = bgraph.number_of_blocks();
+	MutBlock::ID bid, bnum = bgraph.number_of_blocks();
 
-	out << "Total Statistics on Mutation Bridges\nSource\tTarget\tSubsume?\t#Src_Vertex\t#valid_Vertex\t#Sub_Vertex\t#Edges\t#Equivalent\t#Strict\n";
-	while (bid < bnum) {
-		/* get the ports of the next block in the graph */
-		MutBlock & src = bgraph.get_block(bid++);
-		const std::map<MutBlock *, BlockPort *> & ports = src.get_ports();
-
-		/* iterate all ports in src */
-		auto beg = ports.begin(), end = ports.end();
-		while (beg != end) {
-			BlockPort & port = *((beg++)->second);	/* get next port in the src */
-
-			/* summary */
-			out << port.get_source_block().get_block_id() << "\t";
-			out << port.get_target_block().get_block_id() << "\t";
-			out << port.get_source_block().get_coverage().subsume(port.get_target_block().get_coverage()) << "\t";
-			out << port.get_source_block().get_local_graph().number_of_vertices() << "\t";
-			out << port.get_valid_nodes().size() << "\t";
-
-			/* analysis on edges */
-			const std::set<MSGVertex *> & vertices = port.get_valid_nodes();
-			auto vbeg = vertices.begin(), vend = vertices.end();
-			size_t eq = 0, st = 0, sv = 0;
-			while (vbeg != vend) {
-				MSGVertex & vex = *(*(vbeg++));
-				const std::list<MuSubsume> & edges = port.get_direct_subsumption(vex);
-				auto ebeg = edges.begin(), eend = edges.end();
-				while (ebeg != eend) {
-					const MuSubsume & edge = *(ebeg++);
-					const BitSeq & svec = edge.get_source().get_feature()->get_vector();
-					const BitSeq & tvec = edge.get_target().get_feature()->get_vector();
-					if (svec.equals(tvec)) eq++;
-					else st++;
-				}
-				sv++;
-			}	/* end while: vbeg != vend */
-			out << sv << "\t" << (st + eq) << "\t" << eq << "\t" << st << "\n";
-		} /* end while: beg != end */
-
-	} /* end while: blocks iteration */
+	out << "Total Statistics on Block Ports\n";
+	out << "X\tY\tVX\tVVX\tVY\tVVY\tAS\tES\t\SS\tSubsume?\n";
+	for (bid = 0; bid < bnum; bid++) {
+		MutBlock & block = bgraph.get_block(bid);
+		
+		const std::map<MutBlock *, BlockPort *> 
+			& ports = block.get_ports();
+		for (auto beg = ports.begin(), 
+			end = ports.end(); beg != end; beg++) {
+			BlockPort & port = *(beg->second);
+			analysis_port(port, out);
+		}
+	}
 	out << std::endl;
 }
 
