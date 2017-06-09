@@ -23,11 +23,55 @@ class MutClassifierByOperator;
 class MutClassifierByLocation;
 class MutClassifierByCoverage;
 
+/* type for class feature */
+enum MutMetaType {
+	String,
+	Location,
+	BitSequence,
+};
+/* feature for mutant class */
+class MutFeature {
+public:
+	/* create feature for string */
+	MutFeature(const std::string & name) : type(String) { content = new std::string(name); }
+	/* create location-feature */
+	MutFeature(const CodeLocation & loc) : type(Location) { content = new CodeLocation(loc); }
+	/* create bit-string feature */
+	MutFeature(const BitSeq & bits) : type(BitSequence) { content = new BitSeq(bits); }
+	/* deconstructor */
+	~MutFeature() {
+		MutFeature **list;
+		switch (type) {
+		case String:
+			delete ((std::string *)content); break;
+		case Location:
+			delete ((CodeLocation *)content); break;
+		case BitSequence:
+			delete ((BitSeq *)content); break;
+		default:
+			throw "Invalid type: " + std::to_string(type); exit(2);
+		}
+	}
+
+	/* get the meta type of the class */
+	MutMetaType get_meta_type() const { return type; }
+
+	/* get the string feature */
+	const std::string & get_string() const;
+	/* get the location feature */
+	const CodeLocation & get_location() const;
+	/* get the bit-string feature */
+	const BitSeq & get_bit_string() const;
+
+private:
+	MutMetaType type;
+	void * content;
+};
 /* mutation class */
 class MutClass {
 protected:
-	/* create an empty class in group with specified description */
-	MutClass(MutClassGroup &, const std::string &);
+	/* create an empty class in group with specified feature */
+	MutClass(MutClassGroup &, MutFeature &);
 	/* deconstructor */
 	~MutClass();
 
@@ -40,7 +84,7 @@ public:
 	/* get the group where the class is defined */
 	MutClassGroup & get_group() const { return group; }
 	/* get its class-description */
-	const std::string & get_description() const { return description; }
+	const MutFeature & get_feature() const { return *feature; }
 	/* get mutants of this class */
 	const MutantSet & get_mutants() const { return *mutants; }
 	/* whether the mutant belongs to this class */
@@ -53,7 +97,7 @@ private:
 	/* group to define this class */
 	MutClassGroup & group;
 	/* class description, such as operator name */
-	const std::string description;
+	MutFeature * feature;
 	/* mutants of this class */
 	MutantSet * mutants;
 };
@@ -68,7 +112,11 @@ public:
 	/* get the mutant space for this group */
 	MutantSpace & get_mutant_space() const { return mspace; }
 	/* get the set of classes defined in the group */
-	const std::vector<MutClass *> & get_classes() const { return classes; }
+	const std::map<MutFeature *, MutClass *> & get_classes() const { return classes; }
+	/* whether there are mutant class of this feature */
+	bool has_class(MutFeature & ft) const { return classes.count(&ft) > 0; }
+	/* get the mutant class fot this feature */
+	MutClass & get_class(MutFeature &) const;
 
 	/* whether mutant refers to some class in this group */
 	bool has_class_for(Mutant::ID mid) const { return index.count(mid) > 0; }
@@ -81,13 +129,13 @@ private:
 	/* mutant space where the classes are defined */
 	MutantSpace & mspace;
 	/* set of classes */
-	std::vector<MutClass *> classes;
+	std::map<MutFeature *, MutClass *> classes;
 	/* index from mutant to their classes */
 	std::map<Mutant::ID, MutClass *> index;
 
 protected:
-	/* create a new class in the group with specified description */
-	MutClass * new_class(const std::string &);
+	/* create a new class with specified feature */
+	MutClass * new_class(MutFeature &);
 	/* add mutant into the class */
 	void add_mutant(MutClass *, Mutant::ID);
 	/* clear all classes and their mutants */
@@ -109,12 +157,13 @@ protected:
 	/* deconstructor */
 	virtual ~MutClassifier() {}
 
-	/* create a new class in group */
-	MutClass * new_class(const std::string & desc) { return group.new_class(desc); }
-	/* add mutant into class */
-	void add_mutant(MutClass * _class, Mutant::ID mid) { group.add_mutant(_class, mid); }
 	/* classify mutations in the space of the group */
 	virtual void classify_mutants() { throw "Invalid access to virtual class:"; }
+
+	/* create a new class in group */
+	MutClass * new_class(MutFeature & ft) { return group.new_class(ft); }
+	/* add mutant into class */
+	void add_mutant(MutClass * _class, Mutant::ID mid) { group.add_mutant(_class, mid); }
 };
 /* classifier based on operator */
 class MutClassifierByOperator : public MutClassifier {
@@ -159,17 +208,6 @@ private:
 	BitTrieTree trie;
 	ScoreProducer & producer;
 	ScoreConsumer & consumer;
-protected:
-	void classify_mutants();
-};
-/* classifier by two-classes */
-class MutClassifierByIntersection : public MutClassifier {
-public:
-	MutClassifierByIntersection(MutClassGroup & grp, MutClassGroup & g1, MutClassGroup & g2);
-	~MutClassifierByIntersection() {}
-private:
-	MutClassGroup & group1;
-	MutClassGroup & group2;
 protected:
 	void classify_mutants();
 };
