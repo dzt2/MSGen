@@ -63,10 +63,7 @@
     <ClInclude Include="cscript.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
-    <ClInclude Include="msgraph.h">
-      <Filter>Header Files\graph</Filter>
-    </ClInclude>
-    <ClInclude Include="mblock.h">
+    <ClInclude Include="mclass.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
   </ItemGroup>
@@ -98,16 +95,10 @@
     <ClCompile Include="covmut.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
-    <ClCompile Include="msgbuild.cpp">
-      <Filter>Source Files\driver</Filter>
-    </ClCompile>
     <ClCompile Include="gentest.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
-    <ClCompile Include="mblock.cpp">
-      <Filter>Source Files\graph</Filter>
-    </ClCompile>
-    <ClCompile Include="msgraph.cpp">
+    <ClCompile Include="mclass.cpp">
       <Filter>Source Files\graph</Filter>
     </ClCompile>
   </ItemGroup>

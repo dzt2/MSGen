@@ -120,8 +120,7 @@
     <ClInclude Include="ctest.h" />
     <ClInclude Include="ctext.h" />
     <ClInclude Include="ctrace.h" />
-    <ClInclude Include="mblock.h" />
-    <ClInclude Include="msgraph.h" />
+    <ClInclude Include="mclass.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp" />
@@ -134,9 +133,7 @@
     <ClCompile Include="ctext.cpp" />
     <ClCompile Include="ctrace.cpp" />
     <ClCompile Include="gentest.cpp" />
-    <ClCompile Include="mblock.cpp" />
-    <ClCompile Include="msgbuild.cpp" />
-    <ClCompile Include="msgraph.cpp" />
+    <ClCompile Include="mclass.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

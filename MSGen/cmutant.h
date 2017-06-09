@@ -197,6 +197,8 @@ public:
 	bool del_mutant(Mutant::ID);
 	/* parse the set to its complement */
 	bool complement();
+	/* clear all the mutants in this set */
+	void clear() { vec.clear_bytes(); }
 
 	/* get the number of mutants in this set */
 	size_t number_of_mutants() const { return number; }
