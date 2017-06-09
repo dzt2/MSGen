@@ -173,8 +173,9 @@ void MutBlockBuilder::build_blocks(MutBlockGraph & bgraph,
 	CoverageVector * covvec;
 
 	this->open(bgraph);
-	while ((covvec = producer.produce()) != nullptr) 
-		this->build(*covvec);
+	while ((covvec = producer.produce()) != nullptr) {
+		this->build(*covvec); consumer.consume(covvec);
+	}
 	this->close();
 }
 
@@ -192,6 +193,7 @@ void LocalMSGBuilder::add(const ScoreVector & score_vector) {
 	/* get mutant */
 	Mutant::ID mid = score_vector.get_mutant();
 	if (score_vector.get_vector().all_zeros()) return;
+	else if (!(graph->has_block_of_mutant(mid))) return;
 
 	/* get builder */
 	MSGBuilder * builder;
@@ -208,6 +210,14 @@ void LocalMSGBuilder::add(const ScoreVector & score_vector) {
 
 	/* cluster */
 	builder->add_score_vector(score_vector);
+
+	/* validation */
+	/*if (!score_vector.get_vector().subsume(block.get_coverage())) {
+		std::cerr << "Invalid case: " << score_vector.get_mutant() << "\n";
+		Mutant & mutant = score_vector.get_function().get_mutants().get_space().get_mutant(score_vector.get_mutant());
+		const CodeLocation & location = mutant.get_mutation(0).get_location();
+		std::cerr << "\tLocation: \"" << location.get_text_at() << "\"\n";
+	}*/
 }
 void LocalMSGBuilder::end() {
 	auto beg = builders.begin();
@@ -223,7 +233,7 @@ void LocalMSGBuilder::construct_local_graph(MutBlockGraph & bgraph,
 
 	this->open(bgraph);
 	while ((score_vector = producer.produce()) != nullptr) {
-		this->add(*score_vector);
+		this->add(*score_vector); consumer.consume(score_vector);
 	}
 	this->end(); this->close();
 }
@@ -647,7 +657,7 @@ static void analysis_blocks(MutBlockGraph & bgraph, std::ostream & out) {
 static void analysis_ports(MutBlockGraph & bgraph, std::ostream & out) {
 	MutBlock::ID bid = 0, bnum = bgraph.number_of_blocks();
 
-	out << "Total Statistics on Mutation Bridges\nSource\tTarget\tSubsume?\t#Src_Vertex\t#Sub_Vertex\t#Edges\t#Equivalent\t#Strict\n";
+	out << "Total Statistics on Mutation Bridges\nSource\tTarget\tSubsume?\t#Src_Vertex\t#valid_Vertex\t#Sub_Vertex\t#Edges\t#Equivalent\t#Strict\n";
 	while (bid < bnum) {
 		/* get the ports of the next block in the graph */
 		MutBlock & src = bgraph.get_block(bid++);
@@ -662,6 +672,7 @@ static void analysis_ports(MutBlockGraph & bgraph, std::ostream & out) {
 			out << port.get_source_block().get_block_id() << "\t";
 			out << port.get_target_block().get_block_id() << "\t";
 			out << port.get_source_block().get_coverage().subsume(port.get_target_block().get_coverage()) << "\t";
+			out << port.get_source_block().get_local_graph().number_of_vertices() << "\t";
 			out << port.get_valid_nodes().size() << "\t";
 
 			/* analysis on edges */
@@ -689,52 +700,77 @@ static void analysis_ports(MutBlockGraph & bgraph, std::ostream & out) {
 }
 
 /* validate */
-static void validate_equivalence(MutBlockGraph & bgraph) {
-	MutBlock::ID bid = 0, bnum = bgraph.number_of_blocks();
-	while (bid < bnum) {
-		/* get next block for validation */
-		MutBlock & block = bgraph.get_block(bid++);
-		const std::map<MutBlock *, BlockPort *> & ports = block.get_ports();
-		std::cerr << "Block #" << bid - 1 << "\n";
-
-		auto beg = ports.begin(), end = ports.end();
-		while (beg != end) {
-			/* get next port */
-			BlockPort & port = *((beg++)->second); 
-			MutBlock::ID tid = port.get_target_block().get_block_id();
-			const std::set<MSGVertex *> & valid_nodes = port.get_valid_nodes();
-
-			/* validate its equivalence */
-			auto node_beg = valid_nodes.begin();
-			auto node_end = valid_nodes.end();
-			while (node_beg != node_end) {
-				const std::list<MuSubsume> & edges = 
-					port.get_direct_subsumption(*(*(node_beg++)));
-
-				auto edge_beg = edges.begin();
-				auto edge_end = edges.end();
-				while (edge_beg != edge_end) {
-					const MuSubsume & edge = *(edge_beg++);
-					const MSGVertex & x = edge.get_source();
-					const MSGVertex & y = edge.get_target();
-					const BitSeq & xvec = x.get_feature()->get_vector();
-					const BitSeq & yvec = y.get_feature()->get_vector();
-
-					if (xvec.equals(yvec)) {
-						std::cerr << "\tB" << bid - 1 << "[" << x.get_id() << "] --> B" << tid << "[" << y.get_id() << "]\n";
+static void validate_equivalence(BlockPort & port) {
+	const std::set<MSGVertex *> & valid_nodes = port.get_valid_nodes();
+	for (auto beg = valid_nodes.begin(), end = valid_nodes.end(); beg != end; beg++) {
+		MSGVertex & src_vex = *(*(beg));
+		const std::list<MuSubsume> & edges = port.get_direct_subsumption(src_vex);
+		for (auto ebeg = edges.begin(), eend = edges.end(); ebeg != eend; ebeg++) {
+			const MuSubsume & edge = *(ebeg);
+			const MSGVertex & trg_vex = edge.get_target();
+			/* equivalence */
+			if (src_vex.get_feature()->get_vector().equals(trg_vex.get_feature()->get_vector())) {
+				std::cerr << "\tImpossible case: " <<
+					"B" << port.get_source_block().get_block_id() << "[" << src_vex.get_id() << "] == " <<
+					"B" << port.get_target_block().get_block_id() << "[" << trg_vex.get_id() << "]\n";
+				getchar();
+			}
+		}
+	}
+}
+static void validate_equivalence(BlockPort & p1, BlockPort & p2) {
+	const std::set<MSGVertex *> & valid_nodes = p1.get_valid_nodes();
+	for (auto beg = valid_nodes.begin(), end = valid_nodes.end(); beg != end; beg++) {
+		MSGVertex & src_vex = *(*(beg));
+		const std::list<MuSubsume> & DS1 = p1.get_direct_subsumption(src_vex);
+		for (auto DS1_beg = DS1.begin(), DS1_end = DS1.end(); DS1_beg != DS1_end; DS1_beg++) {
+			const MuSubsume & edge1 = *(DS1_beg);
+			MSGVertex & trg_vex = (MSGVertex &)(edge1.get_target());
+			/* equivalence */
+			if (src_vex.get_feature()->get_vector().equals(trg_vex.get_feature()->get_vector())) {
+				bool found = false;
+				if (p2.get_valid_nodes().count(&trg_vex) > 0) {
+					const std::list<MuSubsume> & DS2 = p2.get_direct_subsumption(trg_vex);
+					for (auto DS2_beg = DS2.begin(), DS2_end = DS2.end(); DS2_beg != DS2_end; DS2_beg++) {
+						const MuSubsume & edge2 = *(DS2_beg);
+						MSGVertex & src_vex2 = (MSGVertex &)(edge2.get_target());
+						if (&src_vex == &src_vex2) { found = true; break; }
 					}
+				}
+				
+				if (!found) {
+					std::cerr << "\tLost subsumption: " << 
+						"B" << p1.get_source_block().get_block_id() << "[" << src_vex.get_id() << "] == " <<
+						"B" << p1.get_target_block().get_block_id() << "[" << trg_vex.get_id() << "]\n";
+					getchar();
 				}
 			}
 		}
-		std::cerr << std::endl;
 	}
-	
+}
+static void validate_equivalence(MutBlockGraph & bgraph) {
+	MutBlock::ID sid, tid, num = bgraph.number_of_blocks();
+	for (sid = 0; sid < num; sid++) {
+		/* get next source block */
+		MutBlock & bi = bgraph.get_block(sid);
+		const std::map<MutBlock *, BlockPort *> & ports = bi.get_ports();
+		/* iterate its ports */
+		for (auto beg = ports.begin(), end = ports.end(); beg != end; beg++) {
+			/* get next port and its target of the bi */
+			BlockPort & port = *(beg->second);
+			MutBlock & target = port.get_target_block();
+			if (target.is_linked_to(bi)) {
+				validate_equivalence(port, target.get_port_of(bi));
+			}
+			else validate_equivalence(port);
+		}
+	}
 }
 
 int main() { 
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "prime";
-	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "tcas";
+	File & root = *(new File(prefix + prname)); TestType ttype = TestType::tcas;
 
 	// create code-project, mutant-project, test-project
 	CProgram & program = *(new CProgram(root));
@@ -812,8 +848,8 @@ int main() {
 		std::ofstream lout(prefix + prname + "/bridges.txt");
 		analysis_ports(blocks, lout); lout.close();
 
-		// validation 
-		validate_equivalence(blocks);
+		// validate 
+		//validate_equivalence(blocks);
 
 		// delete resources
 		delete &blocks;
