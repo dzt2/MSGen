@@ -121,6 +121,7 @@
     <ClInclude Include="ctext.h" />
     <ClInclude Include="ctrace.h" />
     <ClInclude Include="mclass.h" />
+    <ClInclude Include="mgraph.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp" />
@@ -134,6 +135,7 @@
     <ClCompile Include="ctrace.cpp" />
     <ClCompile Include="gentest.cpp" />
     <ClCompile Include="mclass.cpp" />
+    <ClCompile Include="mgraph.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

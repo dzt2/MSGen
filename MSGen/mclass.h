@@ -139,6 +139,7 @@ protected:
 	/* get the next mutant and its location */
 	void next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & ft);
 };
+/* classifier for mutants by their coverage */
 class MuClassifierByCoverage : public MuClassifier {
 public:
 	/* classifier for mutant operator */
@@ -162,6 +163,7 @@ protected:
 	/* get the next mutant and its location */
 	void next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & ft);
 };
+/* classifier for mutants by their score vector */
 class MuClassifierByScore : public MuClassifier {
 public:
 	/* classifier for mutant operator */

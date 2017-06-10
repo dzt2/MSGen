@@ -225,7 +225,6 @@ void test_classify_location(const MutantSet & mutants) {
 	}
 }
 
-
 int main() {
 	// initialization
 	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "mid";
