@@ -178,14 +178,14 @@ private:
 class MutantSet {
 protected:
 	/* construct an empty set for mutants in the space */
-	MutantSet(const MutantSpace & spac) : space(spac),
+	MutantSet(MutantSpace & spac) : space(spac),
 		vec(space.number_of_mutants()), number(0) {}
 	/* deconstructor */
 	~MutantSet() {}
 
 public:
 	/* get the space of mutants */
-	const MutantSpace & get_space() const { return space; }
+	MutantSpace & get_space() const { return space; }
 	/* get the bit-string of mutant set */
 	const BitSeq & get_set_vector() const { return vec; }
 
@@ -232,7 +232,7 @@ public:
 	friend class MutantSpace;
 private:
 	/* space where mutants are defined */
-	const MutantSpace & space;
+	MutantSpace & space;
 	/* bit-string to represent */
 	BitSeq vec;
 	/* number of mutants in set */

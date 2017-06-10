@@ -1,195 +1,235 @@
 #include "mclass.h"
 
-const std::string & MutFeature::get_string() const {
-	if (type != MutMetaType::String) {
-		CError error(CErrorType::InvalidArguments, "MutFeature::get_string",
-			"Invalid feature type: (" + std::to_string(type) + ")");
-		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
-	}
-	else return *((std::string *) content);
+MuClass::MuClass(MuClassSet & cset, MuFeature ft) : classes(cset), feature(ft) {
+	mutants = classes.get_mutants().get_space().create_set();
 }
-const CodeLocation & MutFeature::get_location() const {
-	if (type != MutMetaType::Location) {
-		CError error(CErrorType::InvalidArguments, "MutFeature::get_location",
-			"Invalid feature type: (" + std::to_string(type) + ")");
-		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
-	}
-	else return *((CodeLocation *) content);
-}
-const BitSeq & MutFeature::get_bit_string() const {
-	if (type != MutMetaType::BitSequence) {
-		CError error(CErrorType::InvalidArguments, "MutFeature::get_bit_string",
-			"Invalid feature type: (" + std::to_string(type) + ")");
-		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
-	}
-	else return *((BitSeq *)content);
-}
+MuClass::~MuClass() { classes.get_mutants().get_space().delete_set(mutants); }
 
-MutClass::MutClass(MutClassGroup & grp, MutFeature & ft) 
-	: group(grp), feature(&ft) {
-	mutants = grp.get_mutant_space().create_set();
-}
-MutClass::~MutClass() {
-	delete feature;
-	group.get_mutant_space().delete_set(mutants);
-}
-
-MutClassGroup::MutClassGroup(MutantSpace & space)
-	: mspace(space), classes(), index() {}
-MutClass & MutClassGroup::get_class_for(Mutant::ID mid) const {
-	if (index.count(mid) == 0) {
-		CError error(CErrorType::InvalidArguments, "MutClassGroup::get_class_for",
-			"Undefined mutant (" + std::to_string(mid) + ")");
-		CErrorConsumer::consume(error); exit(0);
-	}
-	else {
-		auto iter = index.find(mid); return *(iter->second);
-	}
-}
-MutClass * MutClassGroup::new_class(MutFeature & ft) {
-	if (classes.count(&ft) > 0) {
-		CError error(CErrorType::InvalidArguments, "MutClassGroup::new_class", "Duplicated feature");
+MuClass & MuClassSet::get_class(MuFeature ft) const {
+	if (classes.count(ft) == 0) {
+		CError error(CErrorType::InvalidArguments, "MuClassSet::get_class", "Undefined class");
 		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
 	}
 	else {
-		MutClass * _class = new MutClass(*this, ft);
-		classes[&ft] = _class; return _class;
+		auto iter = classes.find(ft); return *(iter->second);
 	}
 }
-void MutClassGroup::add_mutant(MutClass * _class, Mutant::ID mid) {
-	if (index.count(mid) > 0) {
-		CError error(CErrorType::InvalidArguments, "MutClassGroup::add_mutant",
-			"Duplicated mutant (" + std::to_string(mid) + ")");
-		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
-	}
-	else {
-		_class->add(mid); index[mid] = _class;
-	}
-}
-void MutClassGroup::clear() {
+MuClassSet::~MuClassSet() {
 	auto beg = classes.begin();
 	auto end = classes.end();
-	while (beg != end) 
-		delete ((beg++)->second);
-
-	classes.clear(); index.clear();
+	while (beg != end)
+		delete (beg++)->second;
+	classes.clear();
 }
-MutClass & MutClassGroup::get_class(MutFeature & ft) const {
-	if (classes.count(&ft) == 0) {
-		CError error(CErrorType::InvalidArguments, "MutClassGroup::get_class", "Undefined feature");
+MuClass * MuClassSet::new_class(MuFeature ft) {
+	if (classes.count(ft) > 0) {
+		CError error(CErrorType::InvalidArguments, "MuClassSet::new_class", "Duplicated feature");
 		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
 	}
 	else {
-		auto iter = classes.find(&ft); return *(iter->second);
+		MuClass * _class = new MuClass(*this, ft);
+		classes[ft] = _class; return _class;
 	}
 }
 
-void MutClassifierByOperator::classify_mutants() {
-	/* getters */
-	MutantSpace & mspace = group.get_mutant_space();
-	Mutant::ID mid = 0, mnum = mspace.number_of_mutants();
+MuClassSet & MuClassifier::classify(const MutantSet & mutants) {
+	/* create a new class-set */
+	MuClassSet * class_set = new MuClassSet(mutants);
+	this->pool.insert(class_set);
 
-	/* iterate each mutant in space */
-	while (mid < mnum) {
-		/* get the next mutant */
-		Mutant & mutant = mspace.get_mutant(mid++);
+	/* to classify mutants */
+	Mutant::ID mid = 0; MuFeature ft;
+	size_t num = mutants.get_space().number_of_mutants();
+	while (true) {
+		/* get the next feature */ next(mutants, mid, ft);
+
+		/* validation */
+		if (mid >= num) break;
+		else if (ft == nullptr) {
+			CError error(CErrorType::Runtime, "MuClassifier::classify", "Classify Error");
+			CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+		}
+		
+		/* get the class */
+		MuClass * _class;
+		if (class_set->has_class(ft))
+			 _class = &(class_set->get_class(ft));
+		else _class = class_set->new_class(ft);
+
+		/* insert mutant to the class */
+		_class->add_mutant(mid);
+
+		/* roll to the next mutant */ mid++;
+	} /* end while */
+
+	/* return */ return *class_set;
+}
+void MuClassifier::delete_classes(MuClassSet & _classes) {
+	if (pool.count(&_classes) == 0) {
+		CError error(CErrorType::InvalidArguments, "MuClassifier::delete_classes", "Undefined class-set");
+		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
+	}
+	else {
+		pool.erase(&_classes); delete &_classes;
+	}
+}
+MuClassifier::~MuClassifier() {
+	auto beg = pool.begin();
+	auto end = pool.end();
+	while (beg != end)
+		delete *(beg++);
+	pool.clear();
+}
+
+void MuClassifierByOperator::next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & feature) {
+	size_t num = mutants.get_space().number_of_mutants();
+	while (mid < num && !mutants.has_mutant(mid)) mid++;
+
+	if (mid < num) {
+		/* get the mutant operator */
+		Mutant & mutant = mutants.get_space().get_mutant(mid);
 		const std::string & oprt = mutant.get_operator();
 
-		/* get the mutant class */
-		MutClass * _class; 
-		if (class_map.count(oprt) == 0) {
-			MutFeature * feature = new MutFeature(oprt);
-			_class = this->new_class(*feature); 
-			class_map[oprt] = _class;
+		/* get the mutant feature */
+		if (operators.count(oprt) == 0) {
+			feature = new std::string(oprt);
+			operators[oprt] = (std::string *) feature;
 		}
 		else {
-			auto iter = class_map.find(oprt);
-			_class = iter->second;
+			auto iter = operators.find(oprt);
+			feature = iter->second;
 		}
-
-		/* insert the mutant into the class */
-		this->add_mutant(_class, mutant.get_id());
-	} /* end while: mid < mnum */
+	}
+	else feature = nullptr;
 }
-void MutClassifierByLocation::classify_mutants() {
-	/* getters */
-	MutantSpace & mspace = group.get_mutant_space();
-	Mutant::ID mid = 0, mnum = mspace.number_of_mutants();
+void MuClassifierByLocation::next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & feature) {
+	/* get next feature */
+	size_t num = mutants.get_space().number_of_mutants();
+	while (mid < num && !mutants.has_mutant(mid)) mid++;
 
-	/* iterate each mutant in space */
-	while (mid < mnum) {
-		/* get the next mutant and its location (key) */
-		Mutant & mutant = mspace.get_mutant(mid++);
+	if (mid < num) {
+		/* get next mutant and its location (text) */
+		Mutant & mutant = mutants.get_space().get_mutant(mid);
 		const Mutation & mutation = mutant.get_mutation(mutant.get_orders() - 1);
 		const CodeLocation & loc = mutation.get_location();
-		std::string loc_key = std::to_string(loc.get_bias());
-		loc_key += ":" + std::to_string(loc.get_length());
+		std::string loctext = std::to_string(loc.get_bias());
+		loctext += ":" + std::to_string(loc.get_length());
 
-		/* get the mutant class */
-		MutClass * _class;
-		if (class_map.count(loc_key) == 0) {
-			MutFeature * feature = new MutFeature(loc);
-			_class = this->new_class(*feature);
-			class_map[loc_key] = _class;
+		/* get the feature */
+		if (locations.count(loctext) == 0) {
+			feature = new CodeLocation(loc);
+			locations[loctext] = (CodeLocation *)feature;
 		}
 		else {
-			auto iter = class_map.find(loc_key);
-			_class = iter->second;
+			auto iter = locations.find(loctext);
+			feature = iter->second;
 		}
-
-		/* insert the mutant into the class */
-		this->add_mutant(_class, mutant.get_id());
-	} /* end while: mid < mnum */
+	}
+	else feature = nullptr;
 }
-void MutClassifierByCoverage::classify_mutants() {
-	CoverageVector * covvec;
-	while ((covvec = producer.produce()) != nullptr) {
-		/* get the leaf for the coverage */
-		const BitSeq & coverage = covvec->get_coverage();
-		BitTrie * leaf = trie.insert_vector(coverage);
+void MuClassifierByCoverage::next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & feature) {
+	/* initialization */
+	mid = mutants.get_space().number_of_mutants();
+	CoverageVector * covvec; feature = nullptr;
+	
+	/* iterate all coverage in the producer */
+	while ((covvec = producer->produce()) != nullptr) {
+		/* get the next mutant's feature */
+		if (mutants.has_mutant(covvec->get_mutant())) {
+			/* get the mutant id */ mid = covvec->get_mutant();
 
-		/* get its mutant class */
-		MutClass * _class;
-		if (leaf->get_data() == nullptr) {
-			MutFeature * feature = new MutFeature(coverage);
-			_class = this->new_class(*feature);
-			leaf->set_data(_class);
+			/* get the leaf for this coverage */
+			BitTrie * leaf = trie.get_leaf(covvec->get_coverage());
+
+			/* first time to create coverage vector */
+			if (leaf->get_data() == nullptr) {
+				feature = new BitSeq(covvec->get_coverage());
+				leaf->set_data(feature);
+			}
+			else feature = leaf->get_data();
 		}
-		else _class = (MutClass *)(leaf->get_data());
 
-		/* insert mutant */ 
-		this->add_mutant(_class, covvec->get_mutant());
+		/* consume the coverage */
+		consumer->consume(covvec);
+		/* has-mutant, get-feature, break */
+		if (feature != nullptr) break;
+	} /* end while */
+}
+void MuClassifierByScore::next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & feature) {
+	/* initialization */
+	mid = mutants.get_space().number_of_mutants();
+	ScoreVector * vec; feature = nullptr;
 
-		consumer.consume(covvec);	/* consume the vector */
+	/* iterate all coverage in the producer */
+	while ((vec = producer->produce()) != nullptr) {
+		/* get the next mutant's feature */
+		if (mutants.has_mutant(vec->get_mutant())) {
+			/* get the mutant id */ mid = vec->get_mutant();
+
+			/* get the leaf for this coverage */
+			BitTrie * leaf = trie.get_leaf(vec->get_vector());
+
+			/* first time to create coverage vector */
+			if (leaf->get_data() == nullptr) {
+				feature = new BitSeq(vec->get_vector());
+				leaf->set_data(feature);
+			}
+			else feature = leaf->get_data();
+		}
+
+		/* consume the coverage */
+		consumer->consume(vec);
+		/* has-mutant, get-feature, break */
+		if (feature != nullptr) break;
+	} /* end while */
+}
+
+void test_classify_operator(const MutantSet & mutants) {
+	// classifier
+	MuClassifierByOperator classifier;
+	MuClassSet & class_set = classifier.classify(mutants);
+
+	// 
+	const std::map<MuFeature, MuClass *>
+		classes = class_set.get_classes();
+	std::cout << "There are " << classes.size() << " classes generated...\n";
+
+	auto beg = classes.begin(), end = classes.end();
+	while (beg != end) {
+		/* get next feature and class */
+		MuFeature feature = beg->first;
+		MuClass & _class = *(beg->second);
+		beg++;
+
+		/* for operator */
+		std::string * oprt = (std::string *) feature;
+		std::cout << "\t" << *oprt << " : " << _class.size() << "\n";
 	}
 }
-void MutClassifierByScore::classify_mutants() {
-	ScoreVector * scrvec;
-	while ((scrvec = producer.produce()) != nullptr) {
-		/* get the leaf for the coverage */
-		const BitSeq & killset = scrvec->get_vector();
-		BitTrie * leaf = trie.insert_vector(killset);
+void test_classify_location(const MutantSet & mutants) {
+	MuClassifierByLocation classifier;
+	MuClassSet & class_set = classifier.classify(mutants);
 
-		/* get its mutant class */
-		MutClass * _class;
-		if (leaf->get_data() == nullptr) {
-			MutFeature * feature = new MutFeature(killset);
-			_class = this->new_class(*feature);
-			leaf->set_data(_class);
-		}
-		else _class = (MutClass *)(leaf->get_data());
+	const std::map<MuFeature, MuClass *> & classes = class_set.get_classes();
+	std::cout << "There are " << classes.size() << " location-classes\n";
+	
+	auto beg = classes.begin(), end = classes.end();
+	while (beg != end) {
+		/* get next class and its location */
+		MuClass & _class = *((beg++)->second);
+		MuFeature feature = _class.get_feature();
+		CodeLocation * loc = (CodeLocation *)feature;
 
-		/* insert mutant */
-		this->add_mutant(_class, scrvec->get_mutant());
-
-		consumer.consume(scrvec);	/* consume the vector */
+		/* print location */
+		std::cout << "\t[" << loc->get_bias() << ", " << loc->get_length() << "]\t" << _class.size() << "\n";
 	}
 }
 
-int main() { 
+
+int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "tcas";
-	File & root = *(new File(prefix + prname)); TestType ttype = TestType::tcas;
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "mid";
+	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	CProgram & program = *(new CProgram(root));
@@ -207,32 +247,24 @@ int main() {
 			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
 	}
 
-	// classifier 
+	// classify
 	cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
 	while (cfile_beg != cfile_end) {
-		// get next file and the mutant space 
+		// get next file and load its text 
 		CodeFile & cfile = *(*(cfile_beg++)); cspace.load(cfile);
+
+		// get mutations for code-file
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+		MutantSet & mutants = *(mspace.create_set());
+		mutants.complement();
 
-		// classifier
-		MutClassGroup group(mspace);
-		MutClassifierByOperator classifier(group);
-		classifier.classify();
-
-		std::cout << "Classify for \"" << cfile.get_file().get_path() << "\"\n";
-
-		const std::map<MutFeature *, MutClass *> & classes = group.get_classes();
-		auto beg = classes.begin(), end = classes.end(); size_t num = 0;
-		while (beg != end) {
-			MutClass & ci = *((beg++)->second); num += ci.get_mutants().number_of_mutants();
-			std::cout << "\t" << ci.get_feature().get_string() << " : \t" << ci.get_mutants().number_of_mutants() << std::endl;
-		}
-		std::cout << "\n\tSummary: \t" << num << std::endl;
+		// test 
+		test_classify_location(mutants);
 	}
 
-	/* end */
-	std::cout << "\nPress any key to exit...";
-	getchar(); return 0;
+	// delete resources
+	delete &cmutant; delete &program; delete &  root;
+
+	// exit 
+	std::cout << "\nPress any key to exit..."; getchar(); exit(0);
 }
-
-

@@ -3,211 +3,185 @@
 /*
 	-File : mclass.h
 	-Arth : Lin Huan
-	-Date : June 9th, 2017
-	-Purp : to define model for mutation classifier
-	-Clas :
-		[1] MutClass
-		[2] MutClassGroup
-		[3] MutClassifier (abs)
-			-- MutClassifierByOperator
-			-- MutClassifierByLocation
-			-- MutClassifierByCoverage
+	-Date : Jun 10th 2017
+	-Purp : to define model for mutation classification
+	-Clas : 
+		[1] MuFeature
+		[2] MuClass
+		[3] MuClassSet
+		[4] MuClassifier
 */
 
 #include "cscore.h"
 
-class MutClass;
-class MutClassGroup;
-class MutClassifier;
-class MutClassifierByOperator;
-class MutClassifierByLocation;
-class MutClassifierByCoverage;
+class MuClass;
+class MuClassSet;
+class MuClassifier;
+typedef void * MuFeature;
 
-/* type for class feature */
-enum MutMetaType {
-	String,
-	Location,
-	BitSequence,
-};
-/* feature for mutant class */
-class MutFeature {
+/* mutant class */
+class MuClass {
 public:
-	/* create feature for string */
-	MutFeature(const std::string & name) : type(String) { content = new std::string(name); }
-	/* create location-feature */
-	MutFeature(const CodeLocation & loc) : type(Location) { content = new CodeLocation(loc); }
-	/* create bit-string feature */
-	MutFeature(const BitSeq & bits) : type(BitSequence) { content = new BitSeq(bits); }
-	/* deconstructor */
-	~MutFeature() {
-		MutFeature **list;
-		switch (type) {
-		case String:
-			delete ((std::string *)content); break;
-		case Location:
-			delete ((CodeLocation *)content); break;
-		case BitSequence:
-			delete ((BitSeq *)content); break;
-		default:
-			throw "Invalid type: " + std::to_string(type); exit(2);
-		}
-	}
-
-	/* get the meta type of the class */
-	MutMetaType get_meta_type() const { return type; }
-
-	/* get the string feature */
-	const std::string & get_string() const;
-	/* get the location feature */
-	const CodeLocation & get_location() const;
-	/* get the bit-string feature */
-	const BitSeq & get_bit_string() const;
-
-private:
-	MutMetaType type;
-	void * content;
-};
-/* mutation class */
-class MutClass {
-protected:
-	/* create an empty class in group with specified feature */
-	MutClass(MutClassGroup &, MutFeature &);
-	/* deconstructor */
-	~MutClass();
-
-	/* add a new mutant into the class */
-	void add(Mutant::ID mid) { mutants->add_mutant(mid); }
-	/* clear all the mutants in the class */
-	void clear() { mutants->clear(); }
-
-public:
-	/* get the group where the class is defined */
-	MutClassGroup & get_group() const { return group; }
-	/* get its class-description */
-	const MutFeature & get_feature() const { return *feature; }
-	/* get mutants of this class */
+	/* get the set where the class is defined */
+	MuClassSet & get_classes() const { return classes; }
+	/* get the feature of this class */
+	const MuFeature & get_feature() const { return feature; }
+	/* get the mutants in this class */
 	const MutantSet & get_mutants() const { return *mutants; }
-	/* whether the mutant belongs to this class */
+
+	/* whether there is mutant in this class */
 	bool has_mutant(Mutant::ID mid) const { return mutants->has_mutant(mid); }
+	/* get the number of mutants in this class */
+	size_t size() const { return mutants->number_of_mutants(); }
 
-	/* create | delete | add | clear */
-	friend class MutClassGroup;
-
+	/* create | delete */
+	friend class MuClassSet;
+	/* clear | add-mutant */
+	friend class MuClassifier;
 private:
-	/* group to define this class */
-	MutClassGroup & group;
-	/* class description, such as operator name */
-	MutFeature * feature;
-	/* mutants of this class */
+	/* set where the class is defined */
+	MuClassSet & classes;
+	/* feature of the class */
+	const MuFeature feature;
+	/* set of mutations in this class */
 	MutantSet * mutants;
-};
-/* group to define class for mutations */
-class MutClassGroup {
-public:
-	/* create an empty class group */
-	MutClassGroup(MutantSpace &);
-	/* deconstructor */
-	~MutClassGroup() { clear(); }
-
-	/* get the mutant space for this group */
-	MutantSpace & get_mutant_space() const { return mspace; }
-	/* get the set of classes defined in the group */
-	const std::map<MutFeature *, MutClass *> & get_classes() const { return classes; }
-	/* whether there are mutant class of this feature */
-	bool has_class(MutFeature & ft) const { return classes.count(&ft) > 0; }
-	/* get the mutant class fot this feature */
-	MutClass & get_class(MutFeature &) const;
-
-	/* whether mutant refers to some class in this group */
-	bool has_class_for(Mutant::ID mid) const { return index.count(mid) > 0; }
-	/* get the class of specified mutant */
-	MutClass & get_class_for(Mutant::ID) const;
-
-	/* to new-class | add-mutant | clear */
-	friend class MutClassifier;
-private:
-	/* mutant space where the classes are defined */
-	MutantSpace & mspace;
-	/* set of classes */
-	std::map<MutFeature *, MutClass *> classes;
-	/* index from mutant to their classes */
-	std::map<Mutant::ID, MutClass *> index;
 
 protected:
-	/* create a new class with specified feature */
-	MutClass * new_class(MutFeature &);
-	/* add mutant into the class */
-	void add_mutant(MutClass *, Mutant::ID);
-	/* clear all classes and their mutants */
-	void clear();
-};
+	/* create an empty class in set with specified feature */
+	MuClass(MuClassSet & cset, MuFeature ft);
+	/* deconstructor */
+	~MuClass();
 
+	/* clear all mutants in this class */
+	void clear_mutants() { mutants->clear(); }
+	/* add mutant in this class */
+	void add_mutant(Mutant::ID mid) { mutants->add_mutant(mid); }
+};
+/* set of mutant classes */
+class MuClassSet {
+public:
+	/* get the mutants where the classes are defined */
+	const MutantSet & get_mutants() const { return base; }
+	/* get the classes in this set */
+	const std::map<MuFeature, MuClass *> & get_classes() const { return classes; }
+
+	/* whether there is class of specified feature */
+	bool has_class(MuFeature ft) const { return classes.count(ft) > 0; }
+	/* get class of the specified feature */
+	MuClass & get_class(MuFeature) const;
+
+	/* create | delete | new-class */
+	friend class MuClassifier;
+
+private:
+	/* base where the classes are defined */
+	const MutantSet & base;
+	/* set of classes in the set */
+	std::map<MuFeature, MuClass *> classes;
+
+protected:
+	/* create an empty set for classes on mutants */
+	MuClassSet(const MutantSet & mutants) : base(mutants), classes() {}
+	/* deconstructor */
+	~MuClassSet();
+	/* create a new class for feature */
+	MuClass * new_class(MuFeature);
+};
 /* classifier for mutations */
-class MutClassifier {
+class MuClassifier {
 public:
-	/* classify the mutants */
-	void classify() { group.clear(); classify_mutants(); }
+	/* classify mutants and create class set (dynamically allocated) */
+	MuClassSet & classify(const MutantSet &);
+	/* delete the class set */
+	void delete_classes(MuClassSet &);
+
+private:
+	/* pool for creating and deleting classes */
+	std::set<MuClassSet *> pool;
 
 protected:
-	/* group for classification */
-	MutClassGroup & group;
-
-	/* create builder for classification */
-	MutClassifier(MutClassGroup & grp) : group(grp) {}
+	/* create classifier */
+	MuClassifier() : pool() {}
 	/* deconstructor */
-	virtual ~MutClassifier() {}
+	virtual ~MuClassifier();
+	/* compute the next mutant, including its feature */
+	virtual void next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & ft) {
+		throw "Invalid access to virtual classifier!";
+	}
+};
 
-	/* classify mutations in the space of the group */
-	virtual void classify_mutants() { throw "Invalid access to virtual class:"; }
+/* classifier for mutants by their operator */
+class MuClassifierByOperator : public MuClassifier {
+public:
+	/* classifier for mutant operator */
+	MuClassifierByOperator() : MuClassifier(), operators() {}
+	/* deconstructor */
+	~MuClassifierByOperator() { operators.clear(); }
 
-	/* create a new class in group */
-	MutClass * new_class(MutFeature & ft) { return group.new_class(ft); }
-	/* add mutant into class */
-	void add_mutant(MutClass * _class, Mutant::ID mid) { group.add_mutant(_class, mid); }
-};
-/* classifier based on operator */
-class MutClassifierByOperator : public MutClassifier {
-public:
-	MutClassifierByOperator(MutClassGroup & grp) : MutClassifier(grp), class_map() {}
-	~MutClassifierByOperator() { class_map.clear(); }
 private:
-	std::map<std::string, MutClass *> class_map;
+	std::map<std::string, std::string *> operators;
+
 protected:
-	void classify_mutants();
+	void next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & ft);
 };
-/* classifier based on location */
-class MutClassifierByLocation : public MutClassifier {
+/* classifier for mutants by their location */
+class MuClassifierByLocation : public MuClassifier {
 public:
-	MutClassifierByLocation(MutClassGroup & grp) : MutClassifier(grp), class_map() {}
-	~MutClassifierByLocation() { class_map.clear(); }
+	/* classifier for mutant operator */
+	MuClassifierByLocation() : MuClassifier(), locations() {}
+	/* deconstructor */
+	~MuClassifierByLocation() { locations.clear(); }
+
 private:
-	std::map<std::string, MutClass *> class_map;
+	std::map<std::string, CodeLocation *> locations;
+
 protected:
-	void classify_mutants();
+	/* get the next mutant and its location */
+	void next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & ft);
 };
-/* classifier by coverage */
-class MutClassifierByCoverage : public MutClassifier {
+class MuClassifierByCoverage : public MuClassifier {
 public:
-	MutClassifierByCoverage(MutClassGroup & grp, CoverageProducer & p, CoverageConsumer & c)
-		: MutClassifier(grp), trie(), producer(p), consumer(c) {}
-	~MutClassifierByCoverage() {}
+	/* classifier for mutant operator */
+	MuClassifierByCoverage() : MuClassifier(), producer(nullptr), consumer(nullptr), trie() {}
+	/* deconstructor */
+	~MuClassifierByCoverage() { uninstall(); }
+
+	/* install the classifier with coverage producer */
+	void install(CoverageProducer & p, CoverageConsumer & c) {
+		producer = &p; consumer = &c;
+	}
+	/* remove the coverage producer from consideration */
+	void uninstall() { producer = nullptr; consumer = nullptr; }
+
 private:
+	CoverageProducer * producer;
+	CoverageConsumer * consumer;
 	BitTrieTree trie;
-	CoverageProducer & producer;
-	CoverageConsumer & consumer;
+
 protected:
-	void classify_mutants();
+	/* get the next mutant and its location */
+	void next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & ft);
 };
-/* classifier by score-vector */
-class MutClassifierByScore : public MutClassifier {
+class MuClassifierByScore : public MuClassifier {
 public:
-	MutClassifierByScore(MutClassGroup & grp, ScoreProducer & p, ScoreConsumer & c)
-		: MutClassifier(grp), trie(), producer(p), consumer(c) {}
-	~MutClassifierByScore() {}
+	/* classifier for mutant operator */
+	MuClassifierByScore() : MuClassifier(), producer(nullptr), consumer(nullptr), trie() {}
+	/* deconstructor */
+	~MuClassifierByScore() { uninstall(); }
+
+	/* install the classifier with coverage producer */
+	void install(ScoreProducer & p, ScoreConsumer & c) {
+		producer = &p; consumer = &c;
+	}
+	/* remove the coverage producer from consideration */
+	void uninstall() { producer = nullptr; consumer = nullptr; }
+
 private:
+	ScoreProducer * producer;
+	ScoreConsumer * consumer;
 	BitTrieTree trie;
-	ScoreProducer & producer;
-	ScoreConsumer & consumer;
+
 protected:
-	void classify_mutants();
+	/* get the next mutant and its location */
+	void next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & ft);
 };
