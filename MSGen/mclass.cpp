@@ -139,7 +139,7 @@ void MuClassifierByCoverage::next(const MutantSet & mutants, Mutant::ID & mid, M
 			/* get the mutant id */ mid = covvec->get_mutant();
 
 			/* get the leaf for this coverage */
-			BitTrie * leaf = trie.get_leaf(covvec->get_coverage());
+			BitTrie * leaf = trie.insert_vector(covvec->get_coverage());
 
 			/* first time to create coverage vector */
 			if (leaf->get_data() == nullptr) {
@@ -167,7 +167,7 @@ void MuClassifierByScore::next(const MutantSet & mutants, Mutant::ID & mid, MuFe
 			/* get the mutant id */ mid = vec->get_mutant();
 
 			/* get the leaf for this coverage */
-			BitTrie * leaf = trie.get_leaf(vec->get_vector());
+			BitTrie * leaf = trie.insert_vector(vec->get_vector());
 
 			/* first time to create coverage vector */
 			if (leaf->get_data() == nullptr) {
@@ -223,47 +223,4 @@ void test_classify_location(const MutantSet & mutants) {
 		/* print location */
 		std::cout << "\t[" << loc->get_bias() << ", " << loc->get_length() << "]\t" << _class.size() << "\n";
 	}
-}
-
-int main() {
-	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "profit";
-	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
-
-	// create code-project, mutant-project, test-project
-	CProgram & program = *(new CProgram(root));
-	CMutant & cmutant = *(new CMutant(root, program.get_source()));
-
-	// load mutations 
-	const CodeSpace & cspace = cmutant.get_code_space();
-	const std::set<CodeFile *> & cfiles = cspace.get_code_set();
-	auto cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
-	while (cfile_beg != cfile_end) {
-		const CodeFile & cfile = *(*(cfile_beg++));
-		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		cmutant.load_mutants_for(mspace, true);
-		std::cout << "Load " << mspace.number_of_mutants() <<
-			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
-	}
-
-	// classify
-	cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
-	while (cfile_beg != cfile_end) {
-		// get next file and load its text 
-		CodeFile & cfile = *(*(cfile_beg++)); cspace.load(cfile);
-
-		// get mutations for code-file
-		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		MutantSet & mutants = *(mspace.create_set());
-		mutants.complement();
-
-		// test 
-		test_classify_operator(mutants);
-	}
-
-	// delete resources
-	delete &cmutant; delete &program; delete &  root;
-
-	// exit 
-	std::cout << "\nPress any key to exit..."; getchar(); exit(0);
 }

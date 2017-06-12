@@ -102,6 +102,14 @@ void MSGraph::clear() {
 		delete clusters[i];
 	clusters.clear();
 }
+void MSGraph::clear_edges() {
+	size_t i, n = clusters.size();
+	for (i = 0; i < n; i++) {
+		MuCluster & cluster = *(clusters[i]);
+		cluster.get_in_port().clear();
+		cluster.get_ou_port().clear();
+	}
+}
 void MSGraph::add(MuClassSet & class_set) {
 	/* initialization */ clear();
 
@@ -154,6 +162,461 @@ void MSGraph::update_roots_and_leafs() {
 	}
 }
 
+_MSG_VSpace_down_top::~_MSG_VSpace_down_top() {
+	while (!vqueue.empty()) vqueue.pop();
+	while (!vcache.empty()) vcache.pop();
+	visitset.clear();
+}
+void _MSG_VSpace_down_top::initial() {
+	while (!vqueue.empty()) vqueue.pop();
+	while (!vcache.empty()) vcache.pop();
+	visitset.clear();
 
+	auto beg = leafs.begin();
+	auto end = leafs.end();
+	while (beg != end) {
+		MuCluster * x = *(beg++);
+		vqueue.push(x);
+	}
+}
+void _MSG_VSpace_down_top::visit_subsuming(MuCluster * x) {
+	/* declarations */
+	std::queue<MuCluster *> bfs_queue;
+	std::set<MuCluster *> visit_set;
 
+	/* initialization */
+	bfs_queue.push(x); visit_set.insert(x);
 
+	/* iterate by BFS from x to its parents or parents' parents */
+	while (!bfs_queue.empty()) {
+		/* get next node to be removed from VS */
+		x = bfs_queue.front(); bfs_queue.pop();
+
+		/* get edges from parents to x */
+		const std::vector<MuSubsume> & edges
+			= x->get_in_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		while(beg != end) {
+			/* get next unvisited parent */
+			const MuSubsume & edge = *(beg++);
+			MuCluster & parent = edge.get_source();
+			if (visit_set.count(&parent) > 0) continue;
+
+			/* set parent as visited */
+			visitset.insert(&parent);
+
+			/* update the bfs_queue */
+			bfs_queue.push(&parent);
+			visit_set.insert(&parent);
+		}
+	} /* end while: bfs_queue */
+
+	/* return */ return;
+}
+bool _MSG_VSpace_down_top::accessible(MuCluster * x) {
+	if (adset.count(x) == 0) return false;			/* not in the sub-graph */
+	else if (visitset.count(x) > 0) return false;	/* have been visited */
+	else {
+		/* get the edges from x to its direct children */
+		const std::vector<MuSubsume> & edges
+			= x->get_ou_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+
+		/* validate the x's children */
+		while (beg != end) {
+			/* get next child in sub-graph */
+			const MuSubsume & edge = *(beg++);
+			MuCluster & child = edge.get_target();
+			if (adset.count(&child) == 0) continue;
+
+			/* child is not visited yet */
+			if (visitset.count(&child) == 0)
+				return false;
+		}
+		return true;	/* all children have been visited */
+	}
+}
+MuCluster * _MSG_VSpace_down_top::next() {
+	while (!vqueue.empty()) {
+		/* compute the next unvisited node in sub-graph */
+		while (!vqueue.empty()) {
+			MuCluster * next = vqueue.front();
+			vqueue.pop(); vcache.push(next);
+
+			if (visitset.count(next) == 0) {
+				visitset.insert(next); 
+				return next;
+			}
+		} /* end while: vqueue */
+
+		/* update vqueue from vcache */
+		std::set<MuCluster *> records;
+		while (!vcache.empty()) {
+			MuCluster * x = vcache.front();
+			vcache.pop();
+
+			const std::vector<MuSubsume> & edges
+				= x->get_in_port().get_edges();
+			auto beg = edges.begin(), end = edges.end();
+			while (beg != end) {
+				/* get next un-iterated parent */
+				const MuSubsume & edge = *(beg++);
+				MuCluster & parent = edge.get_source();
+				if (records.count(&parent) > 0) continue;
+				else records.insert(&parent);
+
+				if (accessible(&parent))
+					vqueue.push(&parent);
+			}
+		} /* end while: vcache */
+
+	} /* end while */
+
+	/* no more unvisited node */ return nullptr;
+}
+
+_MSG_VSpace_top_down::~_MSG_VSpace_top_down() {
+	while (!vqueue.empty()) vqueue.pop();
+	while (!vcache.empty()) vcache.pop();
+	visitset.clear();
+}
+void _MSG_VSpace_top_down::initial() {
+	while (!vqueue.empty()) vqueue.pop();
+	while (!vcache.empty()) vcache.pop();
+	visitset.clear();
+
+	auto beg = roots.begin();
+	auto end = roots.end();
+	while (beg != end) {
+		MuCluster * x = *(beg++);
+		vqueue.push(x);
+	}
+}
+void _MSG_VSpace_top_down::visit_subsumed(MuCluster * x) {
+	/* declarations */
+	std::queue<MuCluster *> bfs_queue;
+	std::set<MuCluster *> visit_set;
+
+	/* initialization */
+	bfs_queue.push(x); visit_set.insert(x);
+
+	/* iterate by BFS from x to its parents or parents' parents */
+	while (!bfs_queue.empty()) {
+		/* get next node to be removed from VS */
+		x = bfs_queue.front(); bfs_queue.pop();
+
+		/* get edges from x to its children */
+		const std::vector<MuSubsume> & edges
+			= x->get_ou_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		while (beg != end) {
+			/* get next unvisited parent */
+			const MuSubsume & edge = *(beg++);
+			MuCluster & child = edge.get_target();
+			if (visit_set.count(&child) > 0) continue;
+
+			/* set parent as visited */
+			visitset.insert(&child);
+
+			/* update the bfs_queue */
+			bfs_queue.push(&child);
+			visit_set.insert(&child);
+		}
+	} /* end while: bfs_queue */
+
+	/* return */ return;
+}
+bool _MSG_VSpace_top_down::accessible(MuCluster * x) {
+	if (adset.count(x) == 0) return false;		/* not in sub-graph */
+	else if (visitset.count(x) > 0) return false;	/* have been visited */
+	else {
+		const std::vector<MuSubsume> & edges
+			= x->get_in_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		
+		while (beg != end) {
+			/* get next parent in sub-graph */
+			const MuSubsume & edge = *(beg++);
+			MuCluster & parent = edge.get_source();
+			if (adset.count(&parent) == 0) continue;
+
+			/* not visited, then not accessible */
+			if (visitset.count(&parent) == 0)
+				return false;
+		}
+		return true;
+	}
+}
+MuCluster * _MSG_VSpace_top_down::next() {
+	while (!vqueue.empty()) {
+		/* compute the next unvisited node in sub-graph */
+		while (!vqueue.empty()) {
+			MuCluster * next = vqueue.front();
+			vqueue.pop(); vcache.push(next);
+
+			if (visitset.count(next) == 0) {
+				visitset.insert(next);
+				return next;
+			}
+		} /* end while: vqueue */
+
+		  /* update vqueue from vcache */
+		std::set<MuCluster *> records;
+		while (!vcache.empty()) {
+			MuCluster * x = vcache.front();
+			vcache.pop();
+
+			const std::vector<MuSubsume> & edges
+				= x->get_ou_port().get_edges();
+			auto beg = edges.begin(), end = edges.end();
+			while (beg != end) {
+				/* get next un-iterated parent */
+				const MuSubsume & edge = *(beg++);
+				MuCluster & child = edge.get_target();
+				if (records.count(&child) > 0) continue;
+				else records.insert(&child);
+
+				if (accessible(&child))
+					vqueue.push(&child);
+			}
+		} /* end while: vcache */
+
+	} /* end while */
+
+	/* no more unvisited node */ return nullptr;
+}
+
+void MSGLinker::connect(MSGraph & g, OrderOption opt) {
+	const MuHierarchy & hierarchy = g.get_hierarchy();
+	int i, n = hierarchy.size_of_degress();
+	std::map<MuCluster *, std::set<MuCluster *> *> solutions;
+
+	this->open(g, opt);
+	for (i = n - 1; i >= 0; i--) {
+		/* get level at H[k] */
+		const std::set<MuCluster *> & level 
+			= hierarchy.get_clusters_at(i);
+		auto beg = level.begin(), end = level.end();
+
+		/* compute DS for each x in H[k] */
+		while (beg != end) {
+			MuCluster * x = *(beg++);
+			std::set<MuCluster *> * DS = new std::set<MuCluster *>();
+			compute_direct_subsumption(*x, *DS);
+			solutions[x] = DS;
+		}
+
+		/* connect x to its DS */
+		auto sbeg = solutions.begin();
+		auto send = solutions.end();
+		while (sbeg != send) {
+			MuCluster * x = sbeg->first;
+			std::set<MuCluster *> * DS = sbeg->second;
+			connect_nodes(*x, *DS); delete DS;
+		}
+		solutions.clear();
+
+		/* add nodes in H[k] to subgraph */
+		add_nodes_in(level);
+	}
+	this->close();
+}
+void MSGLinker::open(MSGraph & g, OrderOption opt) {
+	close(); graph = &g; g.clear_edges();
+	switch (opt) {
+	case down_top:
+		vspace = new _MSG_VSpace_down_top(adset, leafs); break;
+	case top_down:
+		vspace = new _MSG_VSpace_top_down(adset, roots); break;
+	case randomly:
+		/* TODO implement random iteration */
+	default:
+		CError error(CErrorType::InvalidArguments, "MSGLinker::open", 
+			"Unknown option (" + std::to_string(opt) + ")");
+		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
+	}
+}
+void MSGLinker::close() {
+	if (graph != nullptr) {
+		graph->update_roots_and_leafs();
+		adset.clear(); roots.clear(); leafs.clear();
+		delete vspace; graph = nullptr;
+	}
+}
+void MSGLinker::connect_nodes(MuCluster & x, 
+	const std::set<MuCluster *> & DS) {
+	auto beg = DS.begin(), end = DS.end();
+	while (beg != end) {
+		MuCluster & y = *(*(beg++));
+		graph->connect(x, y);
+	}
+} 
+void MSGLinker::add_nodes_in(const std::set<MuCluster *> & nodes) {
+	std::set<MuCluster *> erase_roots;
+	auto beg = roots.begin(), end = roots.end();
+	while (beg != end) {
+		MuCluster * x = *(beg++);
+		if (x->get_in_port().get_degree() > 0)
+			erase_roots.insert(x);
+	}
+
+	beg = erase_roots.begin(), end = erase_roots.end();
+	while (beg != end) roots.erase(*(beg++));
+
+	beg = nodes.begin(), end = nodes.end();
+	while (beg != end) {
+		MuCluster * x = *(beg++);
+		adset.insert(x);
+
+		if (x->get_ou_port().get_degree() == 0)
+			leafs.insert(x);
+		if (x->get_in_port().get_degree() == 0)
+			roots.insert(x);
+	}
+}
+void MSGLinker::compute_direct_subsumption(MuCluster & x, std::set<MuCluster *> & DS) {
+	DS.clear(); vspace->initial(); MuCluster * y;
+
+	while ((y = vspace->next()) != nullptr) {
+		if (subsume(x, *y)) {
+			DS.insert(y);
+			this->update_DS(DS, *y);
+			vspace->visit_subsumed(y);
+		}
+		else vspace->visit_subsuming(y);
+	}
+}
+bool MSGLinker::subsume(MuCluster & x, MuCluster & y) {
+	const BitSeq & xv = x.get_score_vector();
+	const BitSeq & yv = y.get_score_vector();
+	return xv.subsume(yv);
+}
+void MSGLinker::update_DS(std::set<MuCluster *> & DS, MuCluster & x) {
+	/* declarations */
+	std::queue<MuCluster *> bfs_queue;
+	std::set<MuCluster *> visit_set;
+
+	/* initialization */
+	bfs_queue.push(&x); visit_set.insert(&x);
+
+	/* iterate by BFS from x to its parents or parents' parents */
+	while (!bfs_queue.empty()) {
+		/* get next node to be removed from VS */
+		MuCluster * y = bfs_queue.front(); bfs_queue.pop();
+
+		/* get edges from x to its children */
+		const std::vector<MuSubsume> & edges
+			= y->get_ou_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		while (beg != end) {
+			/* get next unvisited parent */
+			const MuSubsume & edge = *(beg++);
+			MuCluster & child = edge.get_target();
+			if (visit_set.count(&child) > 0) continue;
+
+			/* set parent as visited */
+			DS.erase(&child);
+
+			/* update the bfs_queue */
+			bfs_queue.push(&child);
+			visit_set.insert(&child);
+		}
+	} /* end while: bfs_queue */
+
+	/* return */ return;
+}
+
+static void printMSG(const MSGraph & graph, std::ostream & out) {
+	MuCluster::ID cid = 0, num = graph.size();
+	out << "Total Summary of Clusters\nCluster\t#Mutants\t#Degree\t#Vector\n";
+	while (cid < num) {
+		MuCluster & x = graph.get_cluster(cid++);
+		out << x.get_id() << "\t" << x.size() << "\t" << 
+			x.get_score_degree() << "\t" << x.get_score_vector().to_string() << "\n";
+	}
+	out << "\n" << std::endl;
+
+	out << "Total Summary of Hierarchy\n";
+	const MuHierarchy & hierarchy = graph.get_hierarchy();
+	size_t k = 0, n = hierarchy.size_of_degress();
+	while (k < n) {
+		const std::set<MuCluster *> & level = hierarchy.get_clusters_at(k++);
+		out << "[" << k - 1 << "] : ";
+
+		auto beg = level.begin(), end = level.end();
+		while (beg != end) {
+			MuCluster * x = *(beg++);
+			out << x->get_id() << "; ";
+		}
+		out << "\n";
+	}
+	out << std::endl;
+}
+
+int main() {
+	// initialization
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "minmax";
+	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
+
+	// create code-project, mutant-project, test-project
+	CProgram & program = *(new CProgram(root));
+	CTest & ctest = *(new CTest(ttype, root, program.get_exec()));
+	CMutant & cmutant = *(new CMutant(root, program.get_source()));
+
+	// load tests
+	ctest.load(); const TestSpace & tspace = ctest.get_space();
+	std::cout << "Loading test cases: " << tspace.number_of_tests() << std::endl;
+
+	// load mutations 
+	const CodeSpace & cspace = cmutant.get_code_space();
+	const std::set<CodeFile *> & cfiles = cspace.get_code_set();
+	auto cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
+	while (cfile_beg != cfile_end) {
+		const CodeFile & cfile = *(*(cfile_beg++));
+		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+		cmutant.load_mutants_for(mspace, true);
+		std::cout << "Load " << mspace.number_of_mutants() <<
+			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
+	}
+
+	// score
+	CScore & cscore = *(new CScore(root, cmutant, ctest));
+
+	// get coverage vector
+	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+	cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
+	while (cfile_beg != cfile_end) {
+		// get next file and load its text 
+		CodeFile & cfile = *(*(cfile_beg++)); cspace.load(cfile);
+
+		// get mutations for code-file
+		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+		MutantSet & mutants = *(mspace.create_set());
+		mutants.complement();
+
+		// get score producer and consumer
+		ScoreSource & score_src = cscore.get_source(cfile);
+		ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+		ScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+
+		/* classify mutations */
+		MuClassifierByScore classifier;
+		classifier.install(producer, consumer);
+		MuClassSet & class_set = classifier.classify(mutants);
+		classifier.uninstall();
+
+		/* create unlinker MSG */
+		MSGraph graph; graph.add(class_set);
+
+		/* print hierarchy */
+		printMSG(graph, std::cout);
+	}
+
+	/* delete memory */
+	delete &cscore; 
+	delete &cmutant; delete &ctest; delete &program;
+	delete &root;
+
+	/* exit */
+	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
+}

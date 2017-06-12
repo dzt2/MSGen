@@ -175,7 +175,7 @@ public:
 	void install(ScoreProducer & p, ScoreConsumer & c) {
 		producer = &p; consumer = &c;
 	}
-	/* remove the coverage producer from consideration */
+	/* remove the score producer from consideration */
 	void uninstall() { producer = nullptr; consumer = nullptr; }
 
 private:

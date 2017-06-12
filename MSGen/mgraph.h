@@ -16,6 +16,7 @@
 */
 
 #include "mclass.h"
+#include <queue>
 
 // class declarations 
 class MuCluster;
@@ -23,7 +24,7 @@ class MuSubsume;
 class MuSubsumePort;
 class MuHierarchy;
 class MSGraph;
-class MSGBuilder;
+class MSGLinker;
 
 /* mutant cluster */
 class MuCluster {
@@ -48,9 +49,9 @@ public:
 	size_t size() const { return _class.size(); }
 
 	/* get the port of edges to this cluster */
-	const MuSubsumePort & get_in_port() const { return *in_port; }
+	MuSubsumePort & get_in_port() const { return *in_port; }
 	/* get the port of edges from the cluster */
-	const MuSubsumePort & get_ou_port() const { return *ou_port; }
+	MuSubsumePort & get_ou_port() const { return *ou_port; }
 
 	/* create | delete | link_to */
 	friend class MSGraph;
@@ -131,8 +132,10 @@ public:
 	/* get the list of edges in the port */
 	const std::vector<MuSubsume> & get_edges() const { return edges; }
 
-	/* create | delete | clear | link */
+	/* create | delete | link */
 	friend class MuCluster;
+	/* clear */
+	friend class MSGraph;
 
 private:
 	std::vector<MuSubsume> edges;
@@ -193,8 +196,13 @@ public:
 	/* get the leafs of this graph (not subsuming) */
 	const std::set<MuCluster *> & get_leafs() const { return leafs; }
 
+	/* clear all the nodes, edges and hierarchy */
+	void clear();
+	/* add classes in set to the MSG */
+	void add(MuClassSet &);
+
 	/* add-class | sort_hierarchy | connect | update-leafs */
-	friend class MSGBuilder;
+	friend class MSGLinker;
 
 private:
 	/* set of nodes in the graph */
@@ -209,17 +217,162 @@ private:
 	std::map<Mutant::ID, MuCluster *> index;
 
 protected:
-	/* clear all the nodes, edges and hierarchy */
-	void clear();
-	/* add classes in set to the MSG */
-	void add(MuClassSet &);
+
+	/* clear all the edges in the graph */
+	void clear_edges();
 	/* connect the edge from x to y */
 	void connect(MuCluster & x, MuCluster & y) { x.link_to(y); }
 	/* update the set of roots and leafs in graph */
 	void update_roots_and_leafs();
 };
 
+/* visit space for sub-graph in MSG */
+class _MSG_VSpace {
+public:
+	/* initialize the visit space */
+	virtual void initial() {}
+	/* get the next unvisited node in sub-graph */
+	virtual MuCluster * next() { return nullptr; }
+	/* tag all those subsuming x in sub-graph as visited */
+	virtual void visit_subsuming(MuCluster *x) {}
+	/* tag all those subsumed by x in sub-graph as visited */
+	virtual void visit_subsumed(MuCluster *x) {}
+};
+/* to iterate unvisited nodes in subgraph of MSG from leafs to roots */
+class _MSG_VSpace_down_top : public _MSG_VSpace {
+public: 
+	/* initialize the visit space */
+	void initial();
+	/* get the next unvisited node in sub-graph */
+	MuCluster * next();
+	/* tag all those subsuming x in sub-graph as visited */
+	void visit_subsuming(MuCluster *x);
+	/* tag all those subsumed by x in sub-graph as visited */
+	void visit_subsumed(MuCluster *x) { /* do nothng! */ }
 
+	/* create and delete */
+	friend class MSGLinker;
+protected:
+	/* create a visit space for sub-graph from leafs to the roots */
+	_MSG_VSpace_down_top(const std::set<MuCluster *> & as, 
+		const std::set<MuCluster *> & lf) : adset(as), leafs(lf) {}
+	/* deconstructor */
+	~_MSG_VSpace_down_top();
+
+private:
+	/* set of nodes in sub-graph */
+	const std::set<MuCluster *> & adset;
+	/* leafs in sub-graph */
+	const std::set<MuCluster *> & leafs;
+
+	/* queue for visited node in current iteration */
+	std::queue<MuCluster *> vqueue;
+	/* cache for updatng vqueue in next iteration */
+	std::queue<MuCluster *> vcache;
+	/* set of nodes that have been (tagged as) visited */
+	std::set<MuCluster *> visitset;
+
+	/* a node is accessible when:
+		1) it is in the subgraph
+		2) it is not visited yet
+		3) all of its children have been visited
+	*/
+	bool accessible(MuCluster *);
+};
+/* to iterate unvisited nodes in subgraph of MSG from roots to leafs */
+class _MSG_VSpace_top_down : public _MSG_VSpace {
+public:
+	/* initialize the visit space */
+	void initial();
+	/* get the next unvisited node in sub-graph */
+	MuCluster * next();
+	/* tag all those subsuming x in sub-graph as visited */
+	void visit_subsuming(MuCluster *x) { /* do nothing */ }
+	/* tag all those subsumed by x in sub-graph as visited */
+	void visit_subsumed(MuCluster *x);
+
+	/* create and delete */
+	friend class MSGLinker;
+protected:
+	/* create a visit space for sub-graph from leafs to the roots */
+	_MSG_VSpace_top_down(const std::set<MuCluster *> & as,
+		const std::set<MuCluster *> & rt) : adset(as), roots(rt) {}
+	/* deconstructor */
+	~_MSG_VSpace_top_down();
+
+private:
+	/* set of nodes in sub-graph */
+	const std::set<MuCluster *> & adset;
+	/* leafs in sub-graph */
+	const std::set<MuCluster *> & roots;
+
+	/* queue for visited node in current iteration */
+	std::queue<MuCluster *> vqueue;
+	/* cache for updatng vqueue in next iteration */
+	std::queue<MuCluster *> vcache;
+	/* set of nodes that have been (tagged as) visited */
+	std::set<MuCluster *> visitset;
+
+	/* a node is accessible when:
+		1) it is in the subgraph
+		2) it is not visited yet
+		3) all of its parents have been visited
+	*/
+	bool accessible(MuCluster *);
+};
+
+/* linker for direct subsumption in MSG */
+class MSGLinker {
+public:
+	typedef char OrderOption;
+	static const OrderOption down_top = 0;	/* order from leafs to roots */
+	static const OrderOption top_down = 1;	/* order from roots to leafs */
+	static const OrderOption randomly = 2;	/* randomly transversal */
+
+	/* create a linker to connect MSG */
+	MSGLinker() : graph(nullptr), vspace(nullptr) {}
+	/* deconstructor */
+	~MSGLinker() { close(); }
+
+	/* compute the direct subsumption between clusters in MSG */
+	void connect(MSGraph & g) { connect(g, down_top); }
+	/*	
+		Compute the direct subsumption between clusters in MSG with specified orders.
+		Note: this order only impacts on the efficiency, not the final results.
+	*/
+	void connect(MSGraph &, OrderOption);
+
+protected:
+	/* open the linker to another graph */
+	void open(MSGraph &, OrderOption);
+	/* compute the nodes directly subsumed by x in sub-graph */
+	void compute_direct_subsumption(MuCluster &, std::set<MuCluster *> &);
+	/* connect x to the nodes in DS */
+	void connect_nodes(MuCluster &, const std::set<MuCluster *> &);
+	/* add all the nodes in sub-graph and update its leafs | roots */
+	void add_nodes_in(const std::set<MuCluster *> &);
+	/* clear the sub-graph and visit-space */
+	void close();
+
+private:
+	/* graph to be processed */
+	MSGraph * graph;
+	/* visit space for computing DS */
+	_MSG_VSpace * vspace;
+
+	/* set of nodes in sub-graph */
+	std::set<MuCluster *> adset;
+	/* set of leafs in sub-graph */
+	std::set<MuCluster *> leafs;
+	/* set of roots in sub-graph */
+	std::set<MuCluster *> roots;
+
+	/* whether x subsumes y */
+	bool subsume(MuCluster &, MuCluster &);
+	/* DS = DS - subsumed(y) + {y} */
+	void update_DS(std::set<MuCluster *> &, MuCluster &);
+
+};
 
 
 
