@@ -248,6 +248,7 @@ MuCluster * _MSG_VSpace_down_top::next() {
 				visitset.insert(next); 
 				break;
 			}
+			else next = nullptr;
 		} /* end while: vqueue */
 
 		/* update vqueue from vcache */
@@ -360,6 +361,7 @@ MuCluster * _MSG_VSpace_top_down::next() {
 				visitset.insert(next);
 				break;
 			}
+			else next = nullptr;
 		} /* end while: vqueue */
 
 		  /* update vqueue from vcache */
@@ -386,6 +388,94 @@ MuCluster * _MSG_VSpace_top_down::next() {
 	} /* end while */
 
 	/* no more unvisited node */ return next;
+}
+
+_MSG_VSpace_randomly::~_MSG_VSpace_randomly() {
+	visitset.clear();
+}
+void _MSG_VSpace_randomly::initial() {
+	visitset.clear();
+	auto beg = adset.begin(), end = adset.end();
+	while (beg != end) visitset.insert(*(beg++));
+}
+void _MSG_VSpace_randomly::visit_subsumed(MuCluster * x) {
+	/* declarations */
+	std::queue<MuCluster *> bfs_queue;
+	std::set<MuCluster *> visit_set;
+
+	/* initialization */
+	bfs_queue.push(x); visit_set.insert(x);
+
+	/* iterate by BFS from x to its parents or parents' parents */
+	while (!bfs_queue.empty()) {
+		/* get next node to be removed from VS */
+		x = bfs_queue.front(); bfs_queue.pop();
+
+		/* get edges from x to its children */
+		const std::vector<MuSubsume> & edges
+			= x->get_ou_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		while (beg != end) {
+			/* get next unvisited parent */
+			const MuSubsume & edge = *(beg++);
+			MuCluster & child = edge.get_target();
+			if (visit_set.count(&child) > 0) continue;
+
+			/* set parent as visited */
+			if(visitset.count(&child) > 0)
+				visitset.erase(&child);
+
+			/* update the bfs_queue */
+			bfs_queue.push(&child);
+			visit_set.insert(&child);
+		}
+	} /* end while: bfs_queue */
+
+	/* return */ return;
+}
+void _MSG_VSpace_randomly::visit_subsuming(MuCluster * x) {
+	/* declarations */
+	std::queue<MuCluster *> bfs_queue;
+	std::set<MuCluster *> visit_set;
+
+	/* initialization */
+	bfs_queue.push(x); visit_set.insert(x);
+
+	/* iterate by BFS from x to its parents or parents' parents */
+	while (!bfs_queue.empty()) {
+		/* get next node to be removed from VS */
+		x = bfs_queue.front(); bfs_queue.pop();
+
+		/* get edges from parents to x */
+		const std::vector<MuSubsume> & edges
+			= x->get_in_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		while (beg != end) {
+			/* get next unvisited parent */
+			const MuSubsume & edge = *(beg++);
+			MuCluster & parent = edge.get_source();
+			if (visit_set.count(&parent) > 0) continue;
+
+			/* set parent as visited */
+			if (visitset.count(&parent) > 0)
+				visitset.erase(&parent);
+
+			/* update the bfs_queue */
+			bfs_queue.push(&parent);
+			visit_set.insert(&parent);
+		}
+	} /* end while: bfs_queue */
+
+	/* return */ return;
+}
+MuCluster * _MSG_VSpace_randomly::next() {
+	MuCluster * next = nullptr;
+	if (!visitset.empty()) {
+		auto beg = visitset.begin();
+		next = *(beg);
+		visitset.erase(next);
+	}
+	return next;
 }
 
 void MSGLinker::connect(MSGraph & g, OrderOption opt) {
@@ -431,7 +521,7 @@ void MSGLinker::open(MSGraph & g, OrderOption opt) {
 	case top_down:
 		vspace = new _MSG_VSpace_top_down(adset, roots); break;
 	case randomly:
-		/* TODO implement random iteration */
+		vspace = new _MSG_VSpace_randomly(adset); break;
 	default:
 		CError error(CErrorType::InvalidArguments, "MSGLinker::open", 
 			"Unknown option (" + std::to_string(opt) + ")");
@@ -486,18 +576,8 @@ void MSGLinker::compute_direct_subsumption(MuCluster & x, std::set<MuCluster *> 
 			this->update_DS(DS, *y);
 			vspace->visit_subsumed(y);
 		}
-		else {
-			vspace->visit_subsuming(y);
-		}
+		else vspace->visit_subsuming(y);
 	}
-
-	/*std::cerr << "[" << x.get_score_vector().to_string() << "]:\n";
-	auto beg = DS.begin(), end = DS.end();
-	while (beg != end) {
-		MuCluster * y = *(beg++);
-		std::cerr << "\t" << y->get_score_vector().to_string() << ";\n";
-	}
-	*/
 }
 bool MSGLinker::subsume(MuCluster & x, MuCluster & y) {
 	const BitSeq & xv = x.get_score_vector();
@@ -528,7 +608,8 @@ void MSGLinker::update_DS(std::set<MuCluster *> & DS, MuCluster & x) {
 			if (visit_set.count(&child) > 0) continue;
 
 			/* set parent as visited */
-			DS.erase(&child);
+			if(DS.count(&child) > 0)
+				DS.erase(&child);
 
 			/* update the bfs_queue */
 			bfs_queue.push(&child);
@@ -555,7 +636,7 @@ static void printMSG(const MSGraph & graph, std::ostream & out) {
 
 int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "prime";
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "Day";
 	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
@@ -610,7 +691,7 @@ int main() {
 
 		/* link the nodes in MSG */
 		MSGLinker linker;
-		linker.connect(graph, MSGLinker::top_down);
+		linker.connect(graph, MSGLinker::randomly);
 		printMSG(graph, std::cout);
 
 		/* link the nodes in MSG (2) */

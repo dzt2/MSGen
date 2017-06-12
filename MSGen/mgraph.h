@@ -320,6 +320,33 @@ private:
 	*/
 	bool accessible(MuCluster *);
 };
+/* to iterate unvisited nodes in subgraph of MSG in a random orders */
+class _MSG_VSpace_randomly : public _MSG_VSpace {
+public:
+	/* initialize the visit space */
+	void initial();
+	/* get the next unvisited node in sub-graph */
+	MuCluster * next();
+	/* tag all those subsuming x in sub-graph as visited */
+	void visit_subsuming(MuCluster *x);
+	/* tag all those subsumed by x in sub-graph as visited */
+	void visit_subsumed(MuCluster *x);
+
+	/* create and delete */
+	friend class MSGLinker;
+protected:
+	/* create a visit space for sub-graph from leafs to the roots */
+	_MSG_VSpace_randomly(const std::set<MuCluster *> & as) : adset(as) {}
+	/* deconstructor */
+	~_MSG_VSpace_randomly();
+
+private:
+	/* set of nodes in sub-graph */
+	const std::set<MuCluster *> & adset;
+	/* set of nodes have not been visited */
+	std::set<MuCluster *> visitset;
+};
+
 
 /* linker for direct subsumption in MSG */
 class MSGLinker {
