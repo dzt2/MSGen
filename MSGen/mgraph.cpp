@@ -693,10 +693,6 @@ int main() {
 		MSGLinker linker;
 		linker.connect(graph, MSGLinker::randomly);
 		printMSG(graph, std::cout);
-
-		/* link the nodes in MSG (2) */
-		/*linker.connect(graph, MSGLinker::top_down);
-		printMSG(graph, std::cout);*/
 	}
 
 	/* delete memory */

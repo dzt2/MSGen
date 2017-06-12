@@ -120,6 +120,17 @@ void BitSeq::conjunct(const BitSeq & y) {
 			bytes[i] = (bytes[i] & (y.bytes)[i]);
 	}
 }
+void BitSeq::disjunct(const BitSeq & y) {
+	if (this->bit_num != y.bit_num) {
+		CError error(CErrorType::InvalidArguments, "BitSeq::conjunct", "Lenght is not matched: ("
+			+ std::to_string(bit_num) + " <--> " + std::to_string(y.bit_num) + ")");
+		CErrorConsumer::consume(error);
+	}
+	else {
+		for (int i = 0; i < length; i++)
+			bytes[i] = (bytes[i] | (y.bytes)[i]);
+	}
+}
 void BitSeq::bit_not() {
 	for (int i = 0; i < length; i++)
 		bytes[i] = ~(bytes[i]);
@@ -131,7 +142,14 @@ bool BitSeq::all_zeros() const {
 	}
 	return true;
 }
-
+BitSeq::size_t BitSeq::degree() const {
+	size_t ones = 0, k = 0;
+	while (k < bit_num) {
+		if (get_bit(k++) == BIT_1)
+			ones++;
+	}
+	return ones;
+}
 
 // BitTrie
 BitTrie::BitTrie(BitSeq::size_t bias_index, const BitSeq & partial_key)

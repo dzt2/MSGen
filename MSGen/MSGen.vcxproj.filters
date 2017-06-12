@@ -34,6 +34,12 @@
     <Filter Include="Source Files\graph">
       <UniqueIdentifier>{30642e7e-a09b-4cad-b618-57676dc98ea9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\analysis">
+      <UniqueIdentifier>{6a5c52f6-4077-404d-8728-8388f85c70f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\analysis">
+      <UniqueIdentifier>{98fd94c6-d7c2-4068-b80f-fdade096854c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ctext.h">
@@ -68,6 +74,9 @@
     </ClInclude>
     <ClInclude Include="mgraph.h">
       <Filter>Header Files\graph</Filter>
+    </ClInclude>
+    <ClInclude Include="submut.h">
+      <Filter>Header Files\analysis</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -69,8 +69,13 @@ public:
 
 	/* conjunct the target with this sequence (and update it) */
 	void conjunct(const BitSeq &);
+	/* compute x = x | y */
+	void disjunct(const BitSeq &); 
 	/* negate all the bits in the sequence */
 	void bit_not();
+
+	/* number of bit-ones in the bit-sequence */
+	size_t degree() const;
 
 	/* number of bytes occupied by this sequence */
 	int byte_number() const;

@@ -195,8 +195,6 @@ public:
 	bool add_mutant(Mutant::ID);
 	/* delete an existing mutant from this set */
 	bool del_mutant(Mutant::ID);
-	/* parse the set to its complement */
-	bool complement();
 	/* clear all the mutants in this set */
 	void clear() { vec.clear_bytes(); }
 
@@ -212,18 +210,27 @@ public:
 		}
 	}
 	/* a = a & b */
-	void intersect(const MutantSet & set) {
+	void conjunct(const MutantSet & set) {
 		if (&space != &(set.get_space())) {
 			CError error(CErrorType::InvalidArguments, "MutantSet::intersect", "Unmatched space");
 			CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
 		}
 		else {
-			vec.conjunct(set.vec); number = 0; 
-			BitSeq::size_t bnum = vec.bit_number();
-			for (BitSeq::size_t i = 0; i < bnum; i++)
-				if (vec.get_bit(i) == BIT_1) number++;
+			vec.conjunct(set.vec); number = vec.degree();
 		}
 	}
+	/* a = a | b */
+	void disjunct(const MutantSet & set) {
+		if (&space != &(set.get_space())) {
+			CError error(CErrorType::InvalidArguments, "MutantSet::intersect", "Unmatched space");
+			CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
+		}
+		else {
+			vec.disjunct(set.vec); number = vec.degree();
+		}
+	}
+	/* parse the set to its complement */
+	bool complement();
 
 	/* get the number of mutants in this set */
 	size_t number_of_mutants() const { return number; }
