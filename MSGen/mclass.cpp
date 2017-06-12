@@ -227,7 +227,7 @@ void test_classify_location(const MutantSet & mutants) {
 
 int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "mid";
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "profit";
 	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
@@ -258,7 +258,7 @@ int main() {
 		mutants.complement();
 
 		// test 
-		test_classify_location(mutants);
+		test_classify_operator(mutants);
 	}
 
 	// delete resources

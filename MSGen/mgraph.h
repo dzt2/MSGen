@@ -88,10 +88,13 @@ class MuSubsume {
 protected:
 	/* create edge from source to target */
 	MuSubsume(MuCluster & src, MuCluster & trg) : source(src), target(trg) {}
+
+public:
+	/* copy method */
+	MuSubsume(const MuSubsume & edge) : source(edge.get_source()), target(edge.get_target()) {}
 	/* deconstructor */
 	~MuSubsume() {}
 
-public:
 	/* get the source node */
 	MuCluster & get_source() const { return source; }
 	/* get the target node */
@@ -208,10 +211,8 @@ private:
 protected:
 	/* clear all the nodes, edges and hierarchy */
 	void clear();
-	/* add another class of mutants into the graph */
+	/* add classes in set to the MSG */
 	void add(MuClassSet &);
-	/* sort the hierarchy after add cluster */
-	void sort_hierarchy() { hierarchy.sort(); }
 	/* connect the edge from x to y */
 	void connect(MuCluster & x, MuCluster & y) { x.link_to(y); }
 	/* update the set of roots and leafs in graph */

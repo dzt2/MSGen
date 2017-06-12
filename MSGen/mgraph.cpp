@@ -102,8 +102,56 @@ void MSGraph::clear() {
 		delete clusters[i];
 	clusters.clear();
 }
-void MSGraph::add(MuClassSet & classes) {
-	
+void MSGraph::add(MuClassSet & class_set) {
+	/* initialization */ clear();
+
+	/* create clusters for each class in the set */
+	const std::map<MuFeature, MuClass *> &
+		classes = class_set.get_classes();
+	auto cbeg = classes.begin(), cend = classes.end();
+	while (cbeg != cend) {
+		/* get next class and create its cluster in the list */
+		MuClass & _class = *((cbeg++)->second);
+		BitSeq * score_vec = (BitSeq *)(_class.get_feature());
+		MuCluster * cluster = new MuCluster(*this, clusters.size(), *score_vec, _class);
+		clusters.push_back(cluster); hierarchy.add(*cluster);
+	}
+
+	/* update index for graph */
+	Mutant::ID mid, mnum = class_set.get_mutants().get_space().number_of_mutants();
+	for (mid = 0; mid < mnum; mid++) {
+		size_t k = 0, n = clusters.size();
+		while (k < n) {
+			if (clusters[k]->has_mutant(mid)) {
+				if (index.count(mid) == 0) {
+					index[mid] = clusters[k];
+				}
+				else {
+					CError error(CErrorType::Runtime, "MSGraph::add", 
+						"Duplicated mutants in two classes (" + std::to_string(mid) + ")");
+					CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+				}
+			}
+			k++;
+		}
+	} /* end for */
+
+	/* sort hierarchy */ hierarchy.sort();
+}
+void MSGraph::update_roots_and_leafs() {
+	/* initialization */
+	roots.clear(); leafs.clear();
+
+	/* iterate each cluster */
+	size_t i, n = clusters.size();
+	for (i = 0; i < n; i++) {
+		MuCluster & cluster = *(clusters[i]);
+
+		if (cluster.get_in_port().get_degree() == 0)
+			roots.insert(&cluster);
+		if (cluster.get_ou_port().get_degree() == 0)
+			leafs.insert(&cluster);
+	}
 }
 
 
