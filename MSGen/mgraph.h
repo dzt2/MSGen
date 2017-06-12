@@ -198,8 +198,8 @@ public:
 
 	/* clear all the nodes, edges and hierarchy */
 	void clear();
-	/* add classes in set to the MSG */
-	void add(MuClassSet &);
+	/* build unlinked MSG by classes */
+	void build(MuClassSet &);
 
 	/* add-class | sort_hierarchy | connect | update-leafs */
 	friend class MSGLinker;
