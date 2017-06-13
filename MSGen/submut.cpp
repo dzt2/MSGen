@@ -157,6 +157,45 @@ static void printTMS(TypedMutantSet & tmutants, std::ostream & out) {
 	out << tmutants.get_subsumed_clusters().size() << "\t";
 	out << tmutants.get_graph().size() << "\n";
 }
+static void mutantsByOperator(const MutantSet & mutants, std::ostream & out) {
+	MuClassSet class_set(mutants);
+
+	MuClassifierByOperator classifier;
+	classifier.classify(class_set);
+	
+	out << "\tMutant Classification by Operators\n";
+	const std::map<MuFeature, MuClass *> & 
+		classes = class_set.get_classes();
+	auto beg = classes.begin();
+	auto end = classes.end();
+	while (beg != end) {
+		MuClass & _class = *((beg++)->second);
+		std::string * oprt = (std::string *) _class.get_feature();
+
+		out << "\t" << *oprt << ": \t" << 
+			_class.get_mutants().number_of_mutants() << "\n";
+	}
+	out << std::endl;
+}
+static void mutantsByLocation(const MutantSet & mutants, std::ostream & out) {
+	MuClassSet class_set(mutants);
+
+	MuClassifierByLocation classifier;
+	classifier.classify(class_set);
+
+	out << "\tMutant Classification by Operators\n";
+	const std::map<MuFeature, MuClass *> &
+		classes = class_set.get_classes();
+	auto beg = classes.begin();
+	auto end = classes.end();
+	while (beg != end) {
+		MuClass & _class = *((beg++)->second);
+		CodeLocation * loc = (CodeLocation *) _class.get_feature();
+		out << "\t[" << loc->get_bias() << ", " << loc->get_length() << "]: \t" <<
+			_class.get_mutants().number_of_mutants() << "\n";
+	}
+	out << std::endl;
+}
 
 /* test main method */
 int main() {
@@ -201,6 +240,11 @@ int main() {
 		std::cout << "\nTyped Mutants Set:\n";
 		printTMS(tmutants, std::cout);
 		std::cout << std::endl;
+
+		// print classification
+		std::cout << "Classification for subsuming mutants\n";
+		mutantsByOperator(tmutants.get_subsuming_mutants(), std::cout);
+		mutantsByLocation(tmutants.get_subsuming_mutants(), std::cout);
 	}
 
 	// delete memory
