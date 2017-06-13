@@ -14,13 +14,7 @@ MuClass & MuClassSet::get_class(MuFeature ft) const {
 		auto iter = classes.find(ft); return *(iter->second);
 	}
 }
-MuClassSet::~MuClassSet() {
-	auto beg = classes.begin();
-	auto end = classes.end();
-	while (beg != end)
-		delete (beg++)->second;
-	classes.clear();
-}
+MuClassSet::~MuClassSet() { clear_classes(); }
 MuClass * MuClassSet::new_class(MuFeature ft) {
 	if (classes.count(ft) > 0) {
 		CError error(CErrorType::InvalidArguments, "MuClassSet::new_class", "Duplicated feature");
@@ -31,10 +25,17 @@ MuClass * MuClassSet::new_class(MuFeature ft) {
 		classes[ft] = _class; return _class;
 	}
 }
+void MuClassSet::clear_classes() {
+	auto beg = classes.begin();
+	auto end = classes.end();
+	while (beg != end)
+		delete (beg++)->second;
+	classes.clear();
+}
 
 void MuClassifier::classify(MuClassSet & class_set) {
 	/* to classify mutants */
-	Mutant::ID mid = 0; MuFeature ft;
+	Mutant::ID mid = 0; MuFeature ft; class_set.clear_classes();
 	const MutantSet & mutants = class_set.get_mutants();
 	size_t num = mutants.get_space().number_of_mutants();
 	while (true) {

@@ -110,5 +110,8 @@
     <ClCompile Include="mgraph.cpp">
       <Filter>Source Files\graph</Filter>
     </ClCompile>
+    <ClCompile Include="submut.cpp">
+      <Filter>Source Files\graph</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

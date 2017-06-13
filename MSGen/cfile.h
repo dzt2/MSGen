@@ -191,7 +191,7 @@ protected:
 	~CodeSpace();
 public:
 	/* get the project of this code space */
-	const CProgram & get_project() const;
+	const CProgram & get_project() const { return project; }
 	/* get the source of the space */
 	const CodeSource & get_source() const { return source; }
 	/* get the set of source code files in the space */

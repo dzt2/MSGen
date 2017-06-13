@@ -87,6 +87,8 @@ private:
 protected:
 	/* create a new class for feature */
 	MuClass * new_class(MuFeature);
+	/* clear old classes */
+	void clear_classes();
 };
 /* classifier for mutations */
 class MuClassifier {

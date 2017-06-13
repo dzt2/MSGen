@@ -21,24 +21,46 @@ class TypedMutantSet;
 */
 class TypedMutantSet {
 public:
+	/* create a typed-set of mutations by MSG */
 	TypedMutantSet(MSGraph &);
+	/* deconstructor */
 	~TypedMutantSet();
 
-	const MutantSet & get_mutants() const;
-	const MutantSet & get_stubborn_mutants() const;
-	const MutantSet & get_subsuming_mutants() const;
-	const MutantSet & get_subsumed_mutants() const;
+	/* get all the mutants in this set */
+	const MutantSet & get_mutants() const { return mutants; }
+	/* get the stubborn mutants */
+	const MutantSet & get_stubborn_mutants() const { return *stubborn_mutants; }
+	/* get the subsuming mutants (non-redundant) */
+	const MutantSet & get_subsuming_mutants() const { return *subsuming_mutants; }
+	/* get the subsumed mutants (redundant) */
+	const MutantSet & get_subsumed_mutants() const { return *subsumed_mutants; }
 
+	/* get the mutant subsumption graph that defines the set*/
+	MSGraph & get_graph() const { return graph; }
+	/* get the cluster of stubborn mutants */
+	MuCluster & get_stubborn_cluster() const { return *stubborn_cluster; }
+	/* get the clusters of subsuming mutants */
+	const std::set<MuCluster *> & get_subsuming_clusters() const { return subsuming_clusters; }
+	/* get the clusters for subsumed mutants */
+	const std::set<MuCluster *> & get_subsumed_clusters() const { return subsumed_clusters; }
 
+private:
+	/* subsumption graph */
+	MSGraph & graph;
+	/* set of all mutations */
+	const MutantSet & mutants;
 
+	/* stubborn mutants (unkilled) */
+	MutantSet * stubborn_mutants;
+	/* subsuming mutants (non-redundant) */
+	MutantSet * subsuming_mutants;
+	/* subsumed mutants (redundant) */
+	MutantSet * subsumed_mutants;
+
+	/* stubborn cluster (unkilled) */
+	MuCluster * stubborn_cluster;
+	/* subsuming clusters (minimal non-redundant) */
+	std::set<MuCluster *> subsuming_clusters;
+	/* subsumed clusters (redundant) */
+	std::set<MuCluster *> subsumed_clusters;
 };
-
-
-
-
-
-
-
-
-
-

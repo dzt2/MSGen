@@ -114,8 +114,6 @@ void MSGraph::clear() {
 	for (size_t i = 0; i < clusters.size(); i++)
 		delete clusters[i];
 	clusters.clear();
-
-	_class_set = nullptr;
 }
 void MSGraph::clear_edges() {
 	size_t i, n = clusters.size();
@@ -636,23 +634,10 @@ void MSGLinker::update_DS(std::set<MuCluster *> & DS, MuCluster & x) {
 	/* return */ return;
 }
 
-static void printMSG(const MSGraph & graph, std::ostream & out) {
-	size_t edges = 0; 
-	MuCluster::ID cid = 0, num = graph.size();
-	while (cid < num) {
-		MuCluster & cluster = graph.get_cluster(cid++);
-		edges += cluster.get_ou_port().get_degree();
-	}
-
-	out << "Total Summary of Graph\n";
-	out << "\t(1) Clusters: \t" << graph.size() << "\n";
-	out << "\t(2) Hierarchy:\t" << graph.get_hierarchy().size_of_degress() << "\n";
-	out << "\t(3) Subsumes: \t" << edges << "\n";
-}
-
+/*
 int main() {
 	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "Day";
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "triangle";
 	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
@@ -696,27 +681,27 @@ int main() {
 		ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
 		ScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
 
-		/* classify mutations */
-		MuClassSet class_set(mutants);
-		MSGraph graph;
+		// classify mutations
+		MSGraph graph(mutants);
 
-		/* create unlinker MSG */
+		// create unlinker MSG
 		MSGBuilder builder;
-		builder.install(class_set, graph);
+		builder.install(graph);
 		builder.build_up(producer, consumer);
 		builder.uninstall();
 
-		/* link the nodes in MSG */
+		// link the nodes in MSG
 		MSGLinker linker;
 		linker.connect(graph, MSGLinker::top_down);
 		printMSG(graph, std::cout);
 	}
 
-	/* delete memory */
+	// delete memory
 	delete &cscore; 
 	delete &cmutant; delete &ctest; delete &program;
 	delete &root;
 
-	/* exit */
+	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
 }
+*/

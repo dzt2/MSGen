@@ -178,9 +178,11 @@ private:
 class MSGraph {
 public:
 	/* create an empty graph */
-	MSGraph() : clusters(), hierarchy(), roots(), leafs(), index() {}
+	MSGraph(const MutantSet & mutants) : clusters(), hierarchy(), roots(), leafs(), index() {
+		_class_set = new MuClassSet(mutants);
+	}
 	/* deconstructor */
-	~MSGraph() { clear(); }
+	~MSGraph() { clear(); delete _class_set; }
 
 	/* get the number of clusters in the grpah */
 	size_t size() const { return clusters.size(); }
@@ -248,9 +250,9 @@ public:
 	~MSGBuilder() { uninstall(); }
 
 	/* establish the class-set and graph to be built up */
-	void install(MuClassSet & cs, MSGraph & g) {
+	void install(MSGraph & g) {
 		uninstall();
-		class_set = &cs;
+		class_set = &(g.get_class_set());
 		graph = &g;
 	}
 	/* build up the unlinker clusters in MSG by score function */
