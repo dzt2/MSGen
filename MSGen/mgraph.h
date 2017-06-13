@@ -196,11 +196,6 @@ public:
 	/* get the leafs of this graph (not subsuming) */
 	const std::set<MuCluster *> & get_leafs() const { return leafs; }
 
-	/* clear all the nodes, edges and hierarchy */
-	void clear();
-	/* build unlinked MSG by classes */
-	void build(MuClassSet &);
-
 	/* get the index from mutant to its cluster */
 	const std::map<Mutant::ID, MuCluster *> & get_index() const { return index; }
 	/* whether the mutant refers to some cluster in graph */
@@ -211,7 +206,9 @@ public:
 	/* get the class-set where the graph is built */
 	MuClassSet & get_class_set() const { return *_class_set; }
 
-	/* add-class | sort_hierarchy | connect | update-leafs */
+	/* clear | build */
+	friend class MSGBuilder;
+	/* connect | update-leafs | clear-edges */
 	friend class MSGLinker;
 
 private:
@@ -229,6 +226,10 @@ private:
 	/* base to build this graph */
 	MuClassSet * _class_set;
 protected:
+	/* clear all the nodes, edges and hierarchy */
+	void clear();
+	/* build unlinked MSG by classes */
+	void build(MuClassSet &);
 
 	/* clear all the edges in the graph */
 	void clear_edges();
@@ -238,6 +239,44 @@ protected:
 	void update_roots_and_leafs();
 };
 
+/* to build unlinked clusters in MSG */
+class MSGBuilder {
+public:
+	/* create a builder for MSG */
+	MSGBuilder() {}
+	/* deconstructor */
+	~MSGBuilder() { uninstall(); }
+
+	/* establish the class-set and graph to be built up */
+	void install(MuClassSet & cs, MSGraph & g) {
+		uninstall();
+		class_set = &cs;
+		graph = &g;
+	}
+	/* build up the unlinker clusters in MSG by score function */
+	void build_up(ScoreProducer & producer, ScoreConsumer & consumer) {
+		if (graph == nullptr || class_set == nullptr) {
+			CError error(CErrorType::Runtime, 
+				"MSGBuilder::build_up", "Invalid access: not-installed");
+			CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+		}
+		else {
+			MuClassifierByScore classifier;
+			classifier.install(producer, consumer);
+			classifier.classify(*class_set);
+			classifier.uninstall();
+
+			graph->clear(); 
+			graph->build(*class_set);
+		}
+	}
+	/* remove the status of builder */
+	void uninstall() { class_set = nullptr; graph = nullptr; }
+
+private:
+	MuClassSet * class_set;
+	MSGraph * graph;
+};
 /* visit space for sub-graph in MSG */
 class _MSG_VSpace {
 public:

@@ -697,17 +697,18 @@ int main() {
 		ScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
 
 		/* classify mutations */
-		MuClassifierByScore classifier;
-		classifier.install(producer, consumer);
-		MuClassSet & class_set = classifier.classify(mutants);
-		classifier.uninstall();
+		MuClassSet class_set(mutants);
+		MSGraph graph;
 
 		/* create unlinker MSG */
-		MSGraph graph; graph.build(class_set);
+		MSGBuilder builder;
+		builder.install(class_set, graph);
+		builder.build_up(producer, consumer);
+		builder.uninstall();
 
 		/* link the nodes in MSG */
 		MSGLinker linker;
-		linker.connect(graph, MSGLinker::down_top);
+		linker.connect(graph, MSGLinker::top_down);
 		printMSG(graph, std::cout);
 	}
 

@@ -32,13 +32,10 @@ MuClass * MuClassSet::new_class(MuFeature ft) {
 	}
 }
 
-MuClassSet & MuClassifier::classify(const MutantSet & mutants) {
-	/* create a new class-set */
-	MuClassSet * class_set = new MuClassSet(mutants);
-	this->pool.insert(class_set);
-
+void MuClassifier::classify(MuClassSet & class_set) {
 	/* to classify mutants */
 	Mutant::ID mid = 0; MuFeature ft;
+	const MutantSet & mutants = class_set.get_mutants();
 	size_t num = mutants.get_space().number_of_mutants();
 	while (true) {
 		/* get the next feature */ next(mutants, mid, ft);
@@ -52,9 +49,9 @@ MuClassSet & MuClassifier::classify(const MutantSet & mutants) {
 		
 		/* get the class */
 		MuClass * _class;
-		if (class_set->has_class(ft))
-			 _class = &(class_set->get_class(ft));
-		else _class = class_set->new_class(ft);
+		if (class_set.has_class(ft))
+			 _class = &(class_set.get_class(ft));
+		else _class = class_set.new_class(ft);
 
 		/* insert mutant to the class */
 		_class->add_mutant(mid);
@@ -62,24 +59,9 @@ MuClassSet & MuClassifier::classify(const MutantSet & mutants) {
 		/* roll to the next mutant */ mid++;
 	} /* end while */
 
-	/* return */ return *class_set;
+	/* return */ return;
 }
-void MuClassifier::delete_classes(MuClassSet & _classes) {
-	if (pool.count(&_classes) == 0) {
-		CError error(CErrorType::InvalidArguments, "MuClassifier::delete_classes", "Undefined class-set");
-		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
-	}
-	else {
-		pool.erase(&_classes); delete &_classes;
-	}
-}
-MuClassifier::~MuClassifier() {
-	auto beg = pool.begin();
-	auto end = pool.end();
-	while (beg != end)
-		delete *(beg++);
-	pool.clear();
-}
+MuClassifier::~MuClassifier() {}
 
 void MuClassifierByOperator::next(const MutantSet & mutants, Mutant::ID & mid, MuFeature & feature) {
 	size_t num = mutants.get_space().number_of_mutants();
@@ -182,45 +164,4 @@ void MuClassifierByScore::next(const MutantSet & mutants, Mutant::ID & mid, MuFe
 		/* has-mutant, get-feature, break */
 		if (feature != nullptr) break;
 	} /* end while */
-}
-
-void test_classify_operator(const MutantSet & mutants) {
-	// classifier
-	MuClassifierByOperator classifier;
-	MuClassSet & class_set = classifier.classify(mutants);
-
-	// 
-	const std::map<MuFeature, MuClass *>
-		classes = class_set.get_classes();
-	std::cout << "There are " << classes.size() << " classes generated...\n";
-
-	auto beg = classes.begin(), end = classes.end();
-	while (beg != end) {
-		/* get next feature and class */
-		MuFeature feature = beg->first;
-		MuClass & _class = *(beg->second);
-		beg++;
-
-		/* for operator */
-		std::string * oprt = (std::string *) feature;
-		std::cout << "\t" << *oprt << " : " << _class.size() << "\n";
-	}
-}
-void test_classify_location(const MutantSet & mutants) {
-	MuClassifierByLocation classifier;
-	MuClassSet & class_set = classifier.classify(mutants);
-
-	const std::map<MuFeature, MuClass *> & classes = class_set.get_classes();
-	std::cout << "There are " << classes.size() << " location-classes\n";
-	
-	auto beg = classes.begin(), end = classes.end();
-	while (beg != end) {
-		/* get next class and its location */
-		MuClass & _class = *((beg++)->second);
-		MuFeature feature = _class.get_feature();
-		CodeLocation * loc = (CodeLocation *)feature;
-
-		/* print location */
-		std::cout << "\t[" << loc->get_bias() << ", " << loc->get_length() << "]\t" << _class.size() << "\n";
-	}
 }

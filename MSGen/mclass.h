@@ -60,6 +60,11 @@ protected:
 /* set of mutant classes */
 class MuClassSet {
 public:
+	/* create an empty set for classes on mutants */
+	MuClassSet(const MutantSet & mutants) : base(mutants), classes() {}
+	/* deconstructor */
+	~MuClassSet();
+
 	/* get the mutants where the classes are defined */
 	const MutantSet & get_mutants() const { return base; }
 	/* get the classes in this set */
@@ -80,28 +85,18 @@ private:
 	std::map<MuFeature, MuClass *> classes;
 
 protected:
-	/* create an empty set for classes on mutants */
-	MuClassSet(const MutantSet & mutants) : base(mutants), classes() {}
-	/* deconstructor */
-	~MuClassSet();
 	/* create a new class for feature */
 	MuClass * new_class(MuFeature);
 };
 /* classifier for mutations */
 class MuClassifier {
 public:
-	/* classify mutants and create class set (dynamically allocated) */
-	MuClassSet & classify(const MutantSet &);
-	/* delete the class set */
-	void delete_classes(MuClassSet &);
-
-private:
-	/* pool for creating and deleting classes */
-	std::set<MuClassSet *> pool;
+	/* classify mutants and create class set */
+	void classify(MuClassSet &);
 
 protected:
 	/* create classifier */
-	MuClassifier() : pool() {}
+	MuClassifier() {}
 	/* deconstructor */
 	virtual ~MuClassifier();
 	/* compute the next mutant, including its feature */
