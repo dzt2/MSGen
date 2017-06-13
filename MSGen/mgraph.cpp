@@ -1,6 +1,8 @@
 #include "mgraph.h"
 #include <algorithm>
 
+unsigned int times;
+
 MuCluster::MuCluster(MSGraph & g, ID id, const BitSeq & vec, MuClass & _cls)
 	: graph(g), cluster_id(id), _class(_cls), score_vector(vec) {
 	BitSeq::size_t k = 0, n = score_vector.bit_number();
@@ -497,6 +499,8 @@ void MSGLinker::connect(MSGraph & g, OrderOption opt) {
 	int i, n = hierarchy.size_of_degress();
 	std::map<MuCluster *, std::set<MuCluster *> *> solutions;
 
+	/* efficiency analysis */ times = 0;
+
 	this->open(g, opt);
 	for (i = n - 1; i >= 0; i--) {
 		/* get level at H[k] */
@@ -590,6 +594,8 @@ void MSGLinker::compute_direct_subsumption(MuCluster & x, std::set<MuCluster *> 
 			vspace->visit_subsumed(y);
 		}
 		else vspace->visit_subsuming(y);
+
+		times++;	/* efficiency analysis */
 	}
 
 	eliminate_DS(DS);	/* eliminate redundant mutants */

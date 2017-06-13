@@ -26,6 +26,9 @@ class MuHierarchy;
 class MSGraph;
 class MSGLinker;
 
+/* to count the number of comparions between mutants */
+extern unsigned int times;
+
 /* mutant cluster */
 class MuCluster {
 public:

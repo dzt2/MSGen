@@ -126,7 +126,7 @@ static void constructMSG(MSGraph & graph, MutantSet & mutants, TestSet & tests) 
 
 	// link the nodes in MSG
 	MSGLinker linker;
-	linker.connect(graph, MSGLinker::top_down);
+	linker.connect(graph, MSGLinker::randomly);
 }
 
 /* output APIs */
@@ -196,12 +196,41 @@ static void mutantsByLocation(const MutantSet & mutants, std::ostream & out) {
 	}
 	out << std::endl;
 }
+static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
+	out << "Efficiency Analysis for Mutant Subsumption Graph\n";
+
+	size_t C = graph.size();
+	size_t M = graph.get_class_set().get_mutants().number_of_mutants();
+	size_t Sm = M * (M - 1) / 2, Sc = C * (C - 1) / 2, Sh, Sa, Se;
+	
+	const MuHierarchy & hierarchy = graph.get_hierarchy();
+	int hlength = hierarchy.size_of_degress() - 1; 
+	size_t cnt = 0, level_num; Sh = 0;
+	while (hlength >= 0) {
+		level_num = hierarchy.get_clusters_at(hlength--).size();
+		Sh += level_num * cnt; cnt += level_num;
+	}
+
+	Sa = times;
+
+	MuCluster::ID cid = 0, cnum = graph.size(); Se = 0;
+	while (cid < cnum) {
+		MuCluster & ci = graph.get_cluster(cid++);
+		Se += ci.get_ou_port().get_degree();
+	}
+
+	out << "\tS[mutants] = \t" << Sm << "\n";
+	out << "\tS[cluster] = \t" << Sc << "\n";
+	out << "\tS[hierarchy] = \t" << Sh << "\n";
+	out << "\tS[algorithm] = \t" << Sa << "\n";
+	out << "\tS[minimal] = \t" << Se << "\n";
+}
 
 /* test main method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "bubble"; 
+	std::string prname = "triangle"; 
 	TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
@@ -234,6 +263,7 @@ int main() {
 		// output MSG
 		std::cout << "Mutant Subsumption Graph\n";
 		printMSG(graph, std::cout);
+		efficiencyMSG(graph, std::cout);
 
 		// create TypedMutantSet
 		TypedMutantSet tmutants(graph);
