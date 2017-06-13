@@ -201,6 +201,16 @@ public:
 	/* build unlinked MSG by classes */
 	void build(MuClassSet &);
 
+	/* get the index from mutant to its cluster */
+	const std::map<Mutant::ID, MuCluster *> & get_index() const { return index; }
+	/* whether the mutant refers to some cluster in graph */
+	bool has_cluster_of(Mutant::ID mid) const { return index.count(mid) > 0; }
+	/* get the cluster of the graph */
+	MuCluster & get_cluster_of(Mutant::ID) const;
+
+	/* get the class-set where the graph is built */
+	MuClassSet & get_class_set() const { return *_class_set; }
+
 	/* add-class | sort_hierarchy | connect | update-leafs */
 	friend class MSGLinker;
 
@@ -216,6 +226,8 @@ private:
 	/* map from mutant to their cluster */
 	std::map<Mutant::ID, MuCluster *> index;
 
+	/* base to build this graph */
+	MuClassSet * _class_set;
 protected:
 
 	/* clear all the edges in the graph */
@@ -346,8 +358,6 @@ private:
 	/* set of nodes have not been visited */
 	std::set<MuCluster *> visitset;
 };
-
-
 /* linker for direct subsumption in MSG */
 class MSGLinker {
 public:

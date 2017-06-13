@@ -143,21 +143,25 @@ protected:
 class MuClassifierByCoverage : public MuClassifier {
 public:
 	/* classifier for mutant operator */
-	MuClassifierByCoverage() : MuClassifier(), producer(nullptr), consumer(nullptr), trie() {}
+	MuClassifierByCoverage() : MuClassifier(), producer(nullptr), consumer(nullptr), trie(nullptr) {}
 	/* deconstructor */
 	~MuClassifierByCoverage() { uninstall(); }
 
 	/* install the classifier with coverage producer */
 	void install(CoverageProducer & p, CoverageConsumer & c) {
-		producer = &p; consumer = &c;
+		producer = &p; consumer = &c; trie = new BitTrieTree();
 	}
 	/* remove the coverage producer from consideration */
-	void uninstall() { producer = nullptr; consumer = nullptr; }
+	void uninstall() { 
+		producer = nullptr; consumer = nullptr; 
+		if (trie != nullptr) delete trie; 
+		trie = nullptr;
+	}
 
 private:
 	CoverageProducer * producer;
 	CoverageConsumer * consumer;
-	BitTrieTree trie;
+	BitTrieTree * trie;
 
 protected:
 	/* get the next mutant and its location */
@@ -167,21 +171,25 @@ protected:
 class MuClassifierByScore : public MuClassifier {
 public:
 	/* classifier for mutant operator */
-	MuClassifierByScore() : MuClassifier(), producer(nullptr), consumer(nullptr), trie() {}
+	MuClassifierByScore() : MuClassifier(), producer(nullptr), consumer(nullptr), trie(nullptr) {}
 	/* deconstructor */
 	~MuClassifierByScore() { uninstall(); }
 
 	/* install the classifier with coverage producer */
 	void install(ScoreProducer & p, ScoreConsumer & c) {
-		producer = &p; consumer = &c;
+		producer = &p; consumer = &c; trie = new BitTrieTree();
 	}
 	/* remove the score producer from consideration */
-	void uninstall() { producer = nullptr; consumer = nullptr; }
+	void uninstall() { 
+		producer = nullptr; consumer = nullptr; 
+		if (trie != nullptr) delete trie;
+		trie = nullptr;
+	}
 
 private:
 	ScoreProducer * producer;
 	ScoreConsumer * consumer;
-	BitTrieTree trie;
+	BitTrieTree * trie;
 
 protected:
 	/* get the next mutant and its location */

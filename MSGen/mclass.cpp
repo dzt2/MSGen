@@ -139,7 +139,7 @@ void MuClassifierByCoverage::next(const MutantSet & mutants, Mutant::ID & mid, M
 			/* get the mutant id */ mid = covvec->get_mutant();
 
 			/* get the leaf for this coverage */
-			BitTrie * leaf = trie.insert_vector(covvec->get_coverage());
+			BitTrie * leaf = trie->insert_vector(covvec->get_coverage());
 
 			/* first time to create coverage vector */
 			if (leaf->get_data() == nullptr) {
@@ -167,7 +167,7 @@ void MuClassifierByScore::next(const MutantSet & mutants, Mutant::ID & mid, MuFe
 			/* get the mutant id */ mid = vec->get_mutant();
 
 			/* get the leaf for this coverage */
-			BitTrie * leaf = trie.insert_vector(vec->get_vector());
+			BitTrie * leaf = trie->insert_vector(vec->get_vector());
 
 			/* first time to create coverage vector */
 			if (leaf->get_data() == nullptr) {

@@ -92,6 +92,19 @@ MuCluster & MSGraph::get_cluster(MuCluster::ID cid) const {
 	}
 	else return *(clusters[cid]);
 }
+MuCluster & MSGraph::get_cluster_of(Mutant::ID mid) const {
+	if (index.count(mid) == 0) {
+		CError error(CErrorType::InvalidArguments, 
+			"MSGraph::get_cluster_of", 
+			"Invalid mutant (" + std::to_string(mid) + ")");
+		CErrorConsumer::consume(error); 
+		exit(CErrorType::InvalidArguments);
+	}
+	else {
+		auto iter = index.find(mid);
+		return *(iter->second);
+	}
+}
 void MSGraph::clear() {
 	roots.clear();
 	leafs.clear();
@@ -101,6 +114,8 @@ void MSGraph::clear() {
 	for (size_t i = 0; i < clusters.size(); i++)
 		delete clusters[i];
 	clusters.clear();
+
+	_class_set = nullptr;
 }
 void MSGraph::clear_edges() {
 	size_t i, n = clusters.size();
@@ -111,7 +126,8 @@ void MSGraph::clear_edges() {
 	}
 }
 void MSGraph::build(MuClassSet & class_set) {
-	/* initialization */ clear();
+	/* initialization */ 
+	clear(); _class_set = &class_set;
 
 	/* create clusters for each class in the set */
 	const std::map<MuFeature, MuClass *> &
@@ -691,7 +707,7 @@ int main() {
 
 		/* link the nodes in MSG */
 		MSGLinker linker;
-		linker.connect(graph, MSGLinker::randomly);
+		linker.connect(graph, MSGLinker::down_top);
 		printMSG(graph, std::cout);
 	}
 
