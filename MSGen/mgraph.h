@@ -447,9 +447,8 @@ private:
 
 	/* whether x subsumes y */
 	bool subsume(MuCluster &, MuCluster &);
-	/* DS = DS - subsumed(y) + {y} */
-	void update_DS(std::set<MuCluster *> &, MuCluster &);
-
+	/* eliminate redundant mutants from DS */
+	void eliminate_DS(std::set<MuCluster *> &);
 };
 
 

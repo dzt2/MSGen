@@ -587,121 +587,49 @@ void MSGLinker::compute_direct_subsumption(MuCluster & x, std::set<MuCluster *> 
 	while ((y = vspace->next()) != nullptr) {
 		if (subsume(x, *y)) {
 			DS.insert(y);
-			this->update_DS(DS, *y);
 			vspace->visit_subsumed(y);
 		}
 		else vspace->visit_subsuming(y);
 	}
+
+	eliminate_DS(DS);	/* eliminate redundant mutants */
 }
 bool MSGLinker::subsume(MuCluster & x, MuCluster & y) {
 	const BitSeq & xv = x.get_score_vector();
 	const BitSeq & yv = y.get_score_vector();
 	return xv.subsume(yv);
 }
-void MSGLinker::update_DS(std::set<MuCluster *> & DS, MuCluster & x) {
+void MSGLinker::eliminate_DS(std::set<MuCluster *> & DS) {
 	/* declarations */
-	std::queue<MuCluster *> bfs_queue;
-	std::set<MuCluster *> visit_set;
+	std::set<MuCluster *> eliminates;
+	std::queue<MuCluster *> DS_queue;
+	MuCluster * x, *y;
 
-	/* initialization */
-	bfs_queue.push(&x); visit_set.insert(&x);
+	/* initialize the queue for iteration */
+	auto beg = DS.begin(), end = DS.end();
+	while (beg != end) DS_queue.push(*(beg++));
 
-	/* iterate by BFS from x to its parents or parents' parents */
-	while (!bfs_queue.empty()) {
-		/* get next node to be removed from VS */
-		MuCluster * y = bfs_queue.front(); bfs_queue.pop();
+	/* eliminate all redundant mutants from DS */
+	while (!DS_queue.empty()) {
+		/* get next not-eliminated node */
+		x = DS_queue.front(); DS_queue.pop();
+		if (DS.count(x) == 0) continue;
 
-		/* get edges from x to its children */
-		const std::vector<MuSubsume> & edges
-			= y->get_ou_port().get_edges();
-		auto beg = edges.begin(), end = edges.end();
+		/* compute all those subsumed by x in current DS */
+		beg = DS.begin(), end = DS.end();
 		while (beg != end) {
-			/* get next unvisited parent */
-			const MuSubsume & edge = *(beg++);
-			MuCluster & child = edge.get_target();
-			if (visit_set.count(&child) > 0) continue;
-
-			/* set parent as visited */
-			if(DS.count(&child) > 0)
-				DS.erase(&child);
-
-			/* update the bfs_queue */
-			bfs_queue.push(&child);
-			visit_set.insert(&child);
+			y = *(beg++);
+			if (x == y) continue;
+			else if (subsume(*x, *y))
+				eliminates.insert(y);
 		}
-	} /* end while: bfs_queue */
 
-	/* return */ return;
-}
-
-/*
-int main() {
-	// initialization
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string prname = "triangle";
-	File & root = *(new File(prefix + prname)); TestType ttype = TestType::general;
-
-	// create code-project, mutant-project, test-project
-	CProgram & program = *(new CProgram(root));
-	CTest & ctest = *(new CTest(ttype, root, program.get_exec()));
-	CMutant & cmutant = *(new CMutant(root, program.get_source()));
-
-	// load tests
-	ctest.load(); const TestSpace & tspace = ctest.get_space();
-	std::cout << "Loading test cases: " << tspace.number_of_tests() << std::endl;
-
-	// load mutations 
-	const CodeSpace & cspace = cmutant.get_code_space();
-	const std::set<CodeFile *> & cfiles = cspace.get_code_set();
-	auto cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
-	while (cfile_beg != cfile_end) {
-		const CodeFile & cfile = *(*(cfile_beg++));
-		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		cmutant.load_mutants_for(mspace, true);
-		std::cout << "Load " << mspace.number_of_mutants() <<
-			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
+		/* eliminate them from DS */
+		beg = eliminates.begin();
+		end = eliminates.end();
+		while (beg != end) DS.erase(*(beg++));
+		eliminates.clear();
 	}
 
-	// score
-	CScore & cscore = *(new CScore(root, cmutant, ctest));
-
-	// get coverage vector
-	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
-	cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
-	while (cfile_beg != cfile_end) {
-		// get next file and load its text 
-		CodeFile & cfile = *(*(cfile_beg++)); cspace.load(cfile);
-
-		// get mutations for code-file
-		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		MutantSet & mutants = *(mspace.create_set());
-		mutants.complement();
-
-		// get score producer and consumer
-		ScoreSource & score_src = cscore.get_source(cfile);
-		ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
-		ScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
-
-		// classify mutations
-		MSGraph graph(mutants);
-
-		// create unlinker MSG
-		MSGBuilder builder;
-		builder.install(graph);
-		builder.build_up(producer, consumer);
-		builder.uninstall();
-
-		// link the nodes in MSG
-		MSGLinker linker;
-		linker.connect(graph, MSGLinker::top_down);
-		printMSG(graph, std::cout);
-	}
-
-	// delete memory
-	delete &cscore; 
-	delete &cmutant; delete &ctest; delete &program;
-	delete &root;
-
-	// exit
-	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
+	/* end */ return;
 }
-*/

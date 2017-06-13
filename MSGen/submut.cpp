@@ -126,7 +126,7 @@ static void constructMSG(MSGraph & graph, MutantSet & mutants, TestSet & tests) 
 
 	// link the nodes in MSG
 	MSGLinker linker;
-	linker.connect(graph, MSGLinker::down_top);
+	linker.connect(graph, MSGLinker::top_down);
 }
 
 /* output APIs */
@@ -143,12 +143,27 @@ static void printMSG(const MSGraph & graph, std::ostream & out) {
 	out << "\t(2) Hierarchy:\t" << graph.get_hierarchy().size_of_degress() << "\n";
 	out << "\t(3) Subsumes: \t" << edges << "\n";
 }
+static void printTMS(TypedMutantSet & tmutants, std::ostream & out) {
+	out << " \tStubborn\tSubsuming\tSubsumed\tTotal\n";
+	out << "mutants\t" << tmutants.get_stubborn_mutants().number_of_mutants();
+	out << "\t" << tmutants.get_subsuming_mutants().number_of_mutants();
+	out << "\t" << tmutants.get_subsumed_mutants().number_of_mutants();
+	out << "\t" << tmutants.get_mutants().number_of_mutants() << "\n";
+
+	out << "clusters\t";
+	tmutants.get_stubborn_cluster();
+	out << "1\t";
+	out << tmutants.get_subsuming_clusters().size() << "\t";
+	out << tmutants.get_subsumed_clusters().size() << "\t";
+	out << tmutants.get_graph().size() << "\n";
+}
 
 /* test main method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "Day"; TestType ttype = TestType::general;
+	std::string prname = "bubble"; 
+	TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
@@ -164,19 +179,28 @@ int main() {
 	const std::set<CodeFile *> & cfiles = cspace.get_code_set();
 	auto beg = cfiles.begin(), end = cfiles.end();
 	while (beg != end) {
-		/* get set of mutants and tests in project */
+		// get set of mutants and tests in project
 		const CodeFile & cfile = *(*(beg++));
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
 		MutantSet & mutants = *(mspace.create_set());
 		TestSet & tests = *(ctest.malloc_test_set());
 		mutants.complement(); tests.complement();
 
-		/* create MSG */
+		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
+
+		// create MSG
 		MSGraph graph(mutants);
 		constructMSG(graph, mutants, tests);
 
-		std::cout << "Subsumption Graph for \"" << cfile.get_file().get_path() << "\"\n";
-		/* output MSG */ printMSG(graph, std::cout);
+		// output MSG
+		std::cout << "Mutant Subsumption Graph\n";
+		printMSG(graph, std::cout);
+
+		// create TypedMutantSet
+		TypedMutantSet tmutants(graph);
+		std::cout << "\nTyped Mutants Set:\n";
+		printTMS(tmutants, std::cout);
+		std::cout << std::endl;
 	}
 
 	// delete memory
