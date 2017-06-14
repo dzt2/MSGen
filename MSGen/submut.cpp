@@ -176,6 +176,7 @@ void TypedOutputter::output_mutants(const MutantSet & mutants,
 			out << "Mutant (" << mutant.get_id() << ")\n";
 			out << "\toperator: " << oprt << "\n";
 			out << "\tcluster: " << cluster.get_id() << "\n";
+			out << "\tdegree: " << cluster.get_score_degree() << "\n";
 
 			/* mutations for mutant */
 			for (int i = 0; i < mutant.get_orders(); i++) {
@@ -475,45 +476,6 @@ static void printTMS(TypedMutantSet & tmutants, std::ostream & out) {
 	out << tmutants.get_subsumed_clusters().size() << "\t";
 	out << tmutants.get_graph().size() << "\n";
 }
-static void mutantsByOperator(const MutantSet & mutants, std::ostream & out) {
-	MuClassSet class_set(mutants);
-
-	MuClassifierByOperator classifier;
-	classifier.classify(class_set);
-	
-	out << "\tMutant Classification by Operators\n";
-	const std::map<MuFeature, MuClass *> & 
-		classes = class_set.get_classes();
-	auto beg = classes.begin();
-	auto end = classes.end();
-	while (beg != end) {
-		MuClass & _class = *((beg++)->second);
-		std::string * oprt = (std::string *) _class.get_feature();
-
-		out << "\t" << *oprt << ": \t" << 
-			_class.get_mutants().number_of_mutants() << "\n";
-	}
-	out << std::endl;
-}
-static void mutantsByLocation(const MutantSet & mutants, std::ostream & out) {
-	MuClassSet class_set(mutants);
-
-	MuClassifierByLocation classifier;
-	classifier.classify(class_set);
-
-	out << "\tMutant Classification by Operators\n";
-	const std::map<MuFeature, MuClass *> &
-		classes = class_set.get_classes();
-	auto beg = classes.begin();
-	auto end = classes.end();
-	while (beg != end) {
-		MuClass & _class = *((beg++)->second);
-		CodeLocation * loc = (CodeLocation *) _class.get_feature();
-		out << "\t[" << loc->get_bias() << ", " << loc->get_length() << "]: \t" <<
-			_class.get_mutants().number_of_mutants() << "\n";
-	}
-	out << std::endl;
-}
 static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 	out << "Efficiency Analysis for Mutant Subsumption Graph\n";
 
@@ -548,7 +510,7 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "tcas"; TestType ttype = TestType::tcas;
+	std::string prname = "minmax"; TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
