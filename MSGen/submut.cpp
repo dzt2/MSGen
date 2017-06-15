@@ -538,11 +538,12 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 }
 
 /* test main method */
+
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "tot_info"; 
-	TestType ttype = TestType::tot_info;
+	std::string prname = "prime"; 
+	TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
