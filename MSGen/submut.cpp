@@ -157,6 +157,11 @@ void TypedOutputter::output_distribution(const TypedMutantSet & tmutants) {
 	std::ofstream out3(dir->get_path() + "/mutant_operator_location.txt");
 	output_distribute_operator_location(tmutants, out3); out3.close();
 }
+void TypedOutputter::output_templates(const TypedMutantSet & tmutants) {
+	std::ofstream out1(dir->get_path() + "/stubborn_quest.txt");
+	output_stubborn_questions(tmutants.get_stubborn_mutants(), out1);
+	out1.close();
+}
 void TypedOutputter::output_mutants(const MutantSet & mutants, 
 	/* declarations */
 	const MSGraph & graph, std::ostream & out) {
@@ -399,6 +404,32 @@ void TypedOutputter::output_distribute_operator_location(
 	}
 	out << std::endl;
 }
+void TypedOutputter::output_stubborn_questions(
+	const MutantSet & mutants, std::ostream & out) {
+	const MutantSpace & mspace = mutants.get_space();
+	Mutant::ID mid, num = mspace.number_of_mutants();
+	const TextBuild & text = *(mspace.get_code_file().get_text());
+
+	out << "id\toperator\tbias\tlength\tline\ttype\ttests\n";
+	for (mid = 0; mid < num; mid++) {
+		if (mutants.has_mutant(mid)) {
+			/* get next mutant and their operators */
+			Mutant & mutant = mspace.get_mutant(mid);
+			const std::string & oprt = mutant.get_operator();
+			size_t orders = mutant.get_orders();
+			const Mutation & mutation = mutant.get_mutation(orders - 1);
+			const CodeLocation & location = mutation.get_location();
+
+			/* output */
+			out << mutant.get_id() << "\t";
+			out << oprt << "\t" << location.get_bias() << "\t";
+			out << location.get_length() << "\t";
+			out << text.lineOfIndex(location.get_bias()) << "\t?\t?\n";
+		}
+	}
+	out << std::endl;
+}
+
 
 
 /* APIs for project models */
@@ -510,7 +541,8 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "minmax"; TestType ttype = TestType::general;
+	std::string prname = "tot_info"; 
+	TestType ttype = TestType::tot_info;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
@@ -552,6 +584,7 @@ int main() {
 		TypedOutputter tout; tout.open(root);
 		tout.output_mutants(tmutants);
 		tout.output_distribution(tmutants);
+		tout.output_templates(tmutants);
 		tout.close();
 	}
 

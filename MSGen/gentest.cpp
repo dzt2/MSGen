@@ -1,10 +1,11 @@
 #include "ctest.h"
 #include "ctrace.h"
 #include "cscript.h"
+
 /*
 int main() {
 // create projects
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "prime"; 
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "bubble"; 
 	File & dir = *(new File(prefix + name)); CProgram & program = *(new CProgram(dir));
 	CTest & tproject = *(new CTest(TestType::general, dir, program.get_exec()));
 	CTrace & cproject = *(new CTrace(dir, program.get_source(), tproject.get_space()));

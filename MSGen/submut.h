@@ -93,6 +93,9 @@ public:
 		3) dist_operator_location.txt
 	*/
 	void output_distribution(const TypedMutantSet &);
+	/* generate ../analysis/stubborn_questions.txt */
+	void output_templates(const TypedMutantSet &);
+
 	/* close the outputter */
 	void close() { dir = nullptr; }
 
@@ -103,12 +106,15 @@ private:
 protected:
 	/* output mutants to specified file */
 	void output_mutants(const MutantSet &, const MSGraph &, std::ostream &);
+
 	/* generate ../analysis/dist_operator.txt */
 	void output_distribute_operator(const TypedMutantSet &, std::ostream &);
 	/* generate ../analysis/dist_location.txt */
 	void output_distribute_location(const TypedMutantSet &, std::ostream &);
 	/* generate ../analysis/dist_oprt_location.txt */
 	void output_distribute_operator_location(const TypedMutantSet &, std::ostream &);
+	/* generate ../analysis/stubborn_question.txt */
+	void output_stubborn_questions(const MutantSet &, std::ostream &);
 };
 
 
