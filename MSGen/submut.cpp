@@ -538,7 +538,7 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 }
 
 /* test main method */
-
+ 
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
