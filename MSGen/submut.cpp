@@ -474,7 +474,7 @@ static void constructMSG(MSGraph & graph, MutantSet & mutants, TestSet & tests) 
 
 	// link the nodes in MSG
 	MSGLinker linker;
-	linker.connect(graph, MSGLinker::top_down);
+	linker.connect(graph, MSGLinker::down_top);
 }
 
 /* output APIs */
@@ -538,11 +538,11 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 }
 
 /* test main method */
- 
+
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "prime"; 
+	std::string prname = "Day"; 
 	TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project

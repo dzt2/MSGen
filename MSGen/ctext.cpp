@@ -7,32 +7,22 @@ LineReader::LineReader(const std::string & filename) : in(filename, std::ios::in
 		std::cerr << "Invalid filename: \"" << filename << "\"" << std::endl;
 		exit(1);
 	}
-	else {
-		line = new std::string();
-		this->roll();
-	}
+	else this->roll();
 }
 LineReader::~LineReader() {
 	in.close();
-	if (line != nullptr) delete line;
-	line = nullptr;
 }
 bool LineReader::hasNext() {
-	return line != nullptr;
+	return !(in.eof());
 }
 std::string LineReader::next() {
-	std::string ret = *line;
 	this->roll();
-	return ret;
+	return line;
 }
 void LineReader::roll() {
-	*line = "";
+	line = "";
 	if (!in.eof()) {
-		in.getline(buff, MaximumLineCharacters);
-		*line = buff;
-	}
-	else {
-		delete line; line = nullptr;
+		std::getline(in, line);
 	}
 }
 
@@ -226,4 +216,3 @@ int last_index_of(const std::string & text, char c) {
 	}
 	return -1;
 }
-

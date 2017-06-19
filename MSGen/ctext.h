@@ -43,9 +43,6 @@ static const std::string FileSeparator = "/";
 * */
 class LineReader {
 public:
-	/* maximum number of characters */
-	static const int MaximumLineCharacters = 32 * 1024;
-
 	/* constructor */
 	LineReader(const std::string &);
 	/* deconstructor */
@@ -60,9 +57,7 @@ private:
 	/* input stream for file */
 	std::ifstream in;
 	/* pointer to the next line */
-	std::string * line;
-	/* buffer to cache characters from file */
-	char buff[MaximumLineCharacters];
+	std::string line;
 
 	/* update pointer to the next line */
 	void roll();
