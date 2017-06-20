@@ -490,9 +490,9 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants, cons
 	const MSGraph & graph = tmutants.get_graph(); std::string line;
 	const TextBuild & text = *(mspace.get_code_file().get_text());
 
-	out << "id\toperator\tline\toriginal\treplace\tcluster\tscore-degree\ttype"
-		<< "\tmut-type\tmut-operation\tobject-type\tobject"
-		<< "\tstmt-type\tstmt-object\tblock\tcoverage\tfunction\n";
+	out << "id\toperator\toriginal\treplace\tcluster\tdegree"
+		<< "\tmut-type\tobject\tobject-context\tstmt-type\tmut-operation"
+		<< "\tfunction\tblock\tcoverage\tline\tcategory\n";
 	for (mid = 0; mid < num; mid++) {
 		if (all_mutants.has_mutant(mid) && graph.has_cluster_of(mid)) {
 			Mutant & mutant = mspace.get_mutant(mid);
@@ -502,9 +502,8 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants, cons
 			const CodeLocation & location = mutation.get_location();
 			const MuCluster & block = cgraph.get_cluster_of(mid);
 
-			out << mutant.get_id() << "\t" << mutant.get_operator() << "\t";
-			out << text.lineOfIndex(location.get_bias()) << "\t";
-			
+			out << mutant.get_id() << "\t" 
+				<< mutant.get_operator() << "\t";
 			line = mutation.get_location().get_text_at();
 			trim_lines(line); out << line << "\t";
 			line = mutation.get_replacement();
@@ -513,14 +512,17 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants, cons
 			out << cluster.get_id() << "\t";
 			out << cluster.get_score_degree() << "\t";
 
+			out << "?\t?\t?\t?\t?\t";
+			out << "?\t" << block.get_id() << "\t" << block.get_score_degree() 
+				<< "\t" << text.lineOfIndex(location.get_bias()) << "\t";
+
 			if (stubborn_set.has_mutant(mid))
 				out << "stubborn\t";
 			else if (subsuming_set.has_mutant(mid))
 				out << "subsuming\t";
 			else out << "subsumed\t";
 
-			out << "?\t?\t?\t?\t?\t?\t";
-			out << block.get_id() << "\t" << block.get_score_degree() << "\t?\n";
+			out << "\n";
 		}
 	}
 
@@ -672,8 +674,8 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "tcas";  
-	TestType ttype = TestType::tcas;
+	std::string prname = "minmax";  
+	TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
