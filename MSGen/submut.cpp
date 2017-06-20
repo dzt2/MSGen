@@ -161,6 +161,10 @@ void TypedOutputter::output_templates(const TypedMutantSet & tmutants) {
 	std::ofstream out1(dir->get_path() + "/stubborn_quest.txt");
 	output_stubborn_questions(tmutants.get_stubborn_mutants(), out1);
 	out1.close();
+
+	std::ofstream out2(dir->get_path() + "/subsuming_quest.txt");
+	output_subsuming_questions(tmutants.get_subsuming_mutants(), 
+		tmutants.get_graph(), out2); out2.close();
 }
 void TypedOutputter::output_mutants(const MutantSet & mutants, 
 	/* declarations */
@@ -429,7 +433,99 @@ void TypedOutputter::output_stubborn_questions(
 	}
 	out << std::endl;
 }
+void TypedOutputter::output_subsuming_questions(
+	const MutantSet & mutants, const MSGraph & graph, std::ostream & out) {
+	/* declarations */
+	const MutantSpace & mspace = mutants.get_space();
+	Mutant::ID mid, num = mspace.number_of_mutants();
+	const TextBuild & text = *(mspace.get_code_file().get_text());
+	std::string line;
 
+	/* title */ 
+	out << "id\toperator\tline\toriginal\treplace\tcluster\tdegree"
+		<< "\tmutated object\tmutated type\tmutated operation"
+		<< "\tcontext object\tcontext type\tcontext point\n";
+	for (mid = 0; mid < num; mid++) {
+		if (mutants.has_mutant(mid)) {
+			Mutant & mutant = mspace.get_mutant(mid);
+			const Mutation & mutation =
+				mutant.get_mutation(mutant.get_orders() - 1);
+			MuCluster & cluster = graph.get_cluster_of(mid);
+
+			out << mutant.get_id() << "\t";
+			out << mutant.get_operator() << "\t";
+			out << text.lineOfIndex(mutation.get_location().get_bias()) << "\t";
+			
+			line = mutation.get_location().get_text_at();
+			trim_lines(line); out << line << "\t";
+			line = mutation.get_replacement();
+			trim_lines(line); out << line << "\t";
+
+			out << cluster.get_id() << "\t";
+			out << cluster.get_score_degree() << "\t";
+
+			out << "\n";
+		}
+	}
+	out << std::endl;
+}
+void TypedOutputter::trim_lines(std::string & line) {
+	std::string line2; int length = line.length();
+	for (int i = 0; i < length; i++) {
+		char ch = line[i];
+		if (ch == '\n') continue;
+		else line2 += ch;
+	}
+	line = line2;
+}
+void TypedOutputter::output_classification(const TypedMutantSet & tmutants, const MSGraph & cgraph) {
+	std::ofstream out(dir->get_path() + "/mut_classification.txt");
+
+	const MutantSet & all_mutants = tmutants.get_mutants();
+	const MutantSet & stubborn_set = tmutants.get_stubborn_mutants();
+	const MutantSet & subsuming_set = tmutants.get_subsuming_mutants();
+	const MutantSpace & mspace = all_mutants.get_space(); 
+	Mutant::ID mid, num = mspace.number_of_mutants();
+
+	const MSGraph & graph = tmutants.get_graph(); std::string line;
+	const TextBuild & text = *(mspace.get_code_file().get_text());
+
+	out << "id\toperator\tline\toriginal\treplace\tcluster\tscore-degree\ttype"
+		<< "\tmut-type\tmut-operation\tobject-type\tobject"
+		<< "\tstmt-type\tstmt-object\tblock\tcoverage\tfunction\n";
+	for (mid = 0; mid < num; mid++) {
+		if (all_mutants.has_mutant(mid) && graph.has_cluster_of(mid)) {
+			Mutant & mutant = mspace.get_mutant(mid);
+			const Mutation & mutation =
+				mutant.get_mutation(mutant.get_orders() - 1);
+			MuCluster & cluster = graph.get_cluster_of(mid);
+			const CodeLocation & location = mutation.get_location();
+			const MuCluster & block = cgraph.get_cluster_of(mid);
+
+			out << mutant.get_id() << "\t" << mutant.get_operator() << "\t";
+			out << text.lineOfIndex(location.get_bias()) << "\t";
+			
+			line = mutation.get_location().get_text_at();
+			trim_lines(line); out << line << "\t";
+			line = mutation.get_replacement();
+			trim_lines(line); out << line << "\t";
+
+			out << cluster.get_id() << "\t";
+			out << cluster.get_score_degree() << "\t";
+
+			if (stubborn_set.has_mutant(mid))
+				out << "stubborn\t";
+			else if (subsuming_set.has_mutant(mid))
+				out << "subsuming\t";
+			else out << "subsumed\t";
+
+			out << "?\t?\t?\t?\t?\t?\t";
+			out << block.get_id() << "\t" << block.get_score_degree() << "\t?\n";
+		}
+	}
+
+	out << std::endl; out.close();
+}
 
 
 /* APIs for project models */
@@ -475,6 +571,40 @@ static void constructMSG(MSGraph & graph, MutantSet & mutants, TestSet & tests) 
 	// link the nodes in MSG
 	MSGLinker linker;
 	linker.connect(graph, MSGLinker::down_top);
+}
+/* load the coverage of tested mutants */
+static void load_test_coverage(MSGraph & graph, MutantSet & mutants, TestSet & tests) {
+	/* getters */
+	const MutantSpace & mspace = mutants.get_space();
+	const TestSpace & tspace = tests.get_space();
+	const CodeFile & cfile = mspace.get_code_file();
+	
+	const CMutant & cmutant = mspace.get_project();
+	const CTest & ctest = tspace.get_project();
+	const CodeSpace & cspace = cmutant.get_code_space();
+	const File & root = cspace.get_project().get_root();
+
+	/* create coverage project */
+	CTrace ctrace(root, cspace, tspace);
+	CoverageSpace & covspace = ctrace.get_space();
+
+	/* load coverage */
+	covspace.add_file_coverage(cfile, tests);
+	ctrace.load_coverage(cfile);
+	std::cout << "Loading coverage for \"" << cfile.get_file().get_path() << "\"" << std::endl;
+
+	/* get coverage information */
+	FileCoverage & fcov = covspace.get_file_coverage(cfile);
+	CoverageProducer producer(mspace, fcov);
+	CoverageConsumer consumer;
+
+	/* classify mutants by their coverage */
+	MSGBuilder builder;
+	builder.install(graph);
+	builder.build_up(producer, consumer);
+	builder.uninstall();
+
+	/* return */ return;
 }
 
 /* output APIs */
@@ -569,9 +699,10 @@ int main() {
 		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
 
 		// create MSG
-		MSGraph graph(mutants);
+		MSGraph graph(mutants), cgraph(mutants);
 		constructMSG(graph, mutants, tests);
 		TypedMutantSet tmutants(graph);
+		load_test_coverage(cgraph, mutants, tests);
 
 		// output MSG
 		std::ofstream out(prefix + prname + "/statistics.txt");
@@ -586,6 +717,7 @@ int main() {
 		tout.output_mutants(tmutants);
 		tout.output_distribution(tmutants);
 		tout.output_templates(tmutants);
+		tout.output_classification(tmutants, cgraph);
 		tout.close();
 	}
 

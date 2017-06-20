@@ -95,6 +95,8 @@ public:
 	void output_distribution(const TypedMutantSet &);
 	/* generate ../analysis/stubborn_questions.txt */
 	void output_templates(const TypedMutantSet &);
+	/* generate ../analysis/classifications.txt from typed mutants and coverage graph */
+	void output_classification(const TypedMutantSet &, const MSGraph &);
 
 	/* close the outputter */
 	void close() { dir = nullptr; }
@@ -102,6 +104,8 @@ public:
 private:
 	/* ../analysis */
 	File * dir;
+	/* remove all '\n' from the code */
+	void trim_lines(std::string &);
 
 protected:
 	/* output mutants to specified file */
@@ -113,8 +117,11 @@ protected:
 	void output_distribute_location(const TypedMutantSet &, std::ostream &);
 	/* generate ../analysis/dist_oprt_location.txt */
 	void output_distribute_operator_location(const TypedMutantSet &, std::ostream &);
+
 	/* generate ../analysis/stubborn_question.txt */
 	void output_stubborn_questions(const MutantSet &, std::ostream &);
+	/* generate ../analysis/subsuming_question.txt */
+	void output_subsuming_questions(const MutantSet &, const MSGraph & graph, std::ostream &);
 };
 
 

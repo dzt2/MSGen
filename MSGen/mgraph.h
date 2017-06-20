@@ -275,6 +275,23 @@ public:
 			graph->build(*class_set);
 		}
 	}
+	/* build up the unlinked clusters for mutants in graph by coverage (not used for subsumption) */
+	void build_up(CoverageProducer & producer, CoverageConsumer & consumer) {
+		if (graph == nullptr || class_set == nullptr) {
+			CError error(CErrorType::Runtime,
+				"MSGBuilder::build_up", "Invalid access: not-installed");
+			CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+		}
+		else {
+			MuClassifierByCoverage classifier;
+			classifier.install(producer, consumer);
+			classifier.classify(*class_set);
+			classifier.uninstall();
+
+			graph->clear();
+			graph->build(*class_set);
+		}
+	}
 	/* remove the status of builder */
 	void uninstall() { class_set = nullptr; graph = nullptr; }
 
