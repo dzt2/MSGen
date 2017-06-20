@@ -672,7 +672,7 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "tcas"; 
+	std::string prname = "tcas";  
 	TestType ttype = TestType::tcas;
 
 	// create code-project, mutant-project, test-project
