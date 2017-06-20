@@ -7,7 +7,6 @@ LineReader::LineReader(const std::string & filename) : in(filename, std::ios::in
 		std::cerr << "Invalid filename: \"" << filename << "\"" << std::endl;
 		exit(1);
 	}
-	else this->roll();
 }
 LineReader::~LineReader() {
 	in.close();
