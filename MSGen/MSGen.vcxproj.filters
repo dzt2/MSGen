@@ -113,5 +113,8 @@
     <ClCompile Include="submut.cpp">
       <Filter>Source Files\graph</Filter>
     </ClCompile>
+    <ClCompile Include="autotest.cpp">
+      <Filter>Source Files\driver</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

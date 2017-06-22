@@ -478,7 +478,7 @@ void TypedOutputter::trim_lines(std::string & line) {
 	}
 	line = line2;
 }
-void TypedOutputter::output_classification(const TypedMutantSet & tmutants, const MSGraph & cgraph) {
+void TypedOutputter::output_classification(const TypedMutantSet & tmutants) {
 	std::ofstream out(dir->get_path() + "/mut_classification.txt");
 
 	const MutantSet & all_mutants = tmutants.get_mutants();
@@ -490,9 +490,7 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants, cons
 	const MSGraph & graph = tmutants.get_graph(); std::string line;
 	const TextBuild & text = *(mspace.get_code_file().get_text());
 
-	out << "id\toperator\toriginal\treplace\tcluster\tdegree"
-		<< "\tmut-type\tobject\tobject-context\tstmt-type\tmut-operation"
-		<< "\tfunction\tblock\tcoverage\tline\tcategory\n";
+	out << "id\tcluster\tdegree\toperator\tline\toriginal\treplace\tcategory\n";
 	for (mid = 0; mid < num; mid++) {
 		if (all_mutants.has_mutant(mid) && graph.has_cluster_of(mid)) {
 			Mutant & mutant = mspace.get_mutant(mid);
@@ -500,21 +498,17 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants, cons
 				mutant.get_mutation(mutant.get_orders() - 1);
 			MuCluster & cluster = graph.get_cluster_of(mid);
 			const CodeLocation & location = mutation.get_location();
-			const MuCluster & block = cgraph.get_cluster_of(mid);
 
-			out << mutant.get_id() << "\t" 
-				<< mutant.get_operator() << "\t";
+			out << mutant.get_id() << "\t"
+				<< cluster.get_id() << "\t"
+				<< cluster.get_score_degree() << "\t"
+				<< mutant.get_operator() << "\t"
+				<< text.lineOfIndex(location.get_bias()) << "\t";
+
 			line = mutation.get_location().get_text_at();
 			trim_lines(line); out << line << "\t";
 			line = mutation.get_replacement();
 			trim_lines(line); out << line << "\t";
-
-			out << cluster.get_id() << "\t";
-			out << cluster.get_score_degree() << "\t";
-
-			out << "?\t?\t?\t?\t?\t";
-			out << "?\t" << block.get_id() << "\t" << block.get_score_degree() 
-				<< "\t" << text.lineOfIndex(location.get_bias()) << "\t";
 
 			if (stubborn_set.has_mutant(mid))
 				out << "stubborn\t";
@@ -528,7 +522,6 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants, cons
 
 	out << std::endl; out.close();
 }
-
 
 /* APIs for project models */
 /* load the tests and mutants into the project */
@@ -622,6 +615,23 @@ static void printMSG(const MSGraph & graph, std::ostream & out) {
 	out << "\t(1) Clusters: \t" << graph.size() << "\n";
 	out << "\t(2) Hierarchy:\t" << graph.get_hierarchy().size_of_degress() << "\n";
 	out << "\t(3) Subsumes: \t" << edges << "\n";
+
+	out << "\nEdge map tables:\n";
+	for (cid = 0; cid < num; cid++) {
+		MuCluster & cluster = graph.get_cluster(cid);
+		out << "\t" << cluster.get_id() << "\t--> {";
+
+		const std::vector<MuSubsume> & edges 
+			= cluster.get_ou_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		while (beg != end) {
+			const MuSubsume & edge = *(beg++);
+			MuCluster & trg = edge.get_target();
+			out << trg.get_id() << "; ";
+		}
+		out << "}\n";
+	}
+	out << std::endl;
 }
 static void printTMS(TypedMutantSet & tmutants, std::ostream & out) {
 	out << " \tStubborn\tSubsuming\tHard\tSubsumed\tTotal\n";
@@ -674,7 +684,7 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "minmax";  
+	std::string prname = "Day";  
 	TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
@@ -701,10 +711,9 @@ int main() {
 		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
 
 		// create MSG
-		MSGraph graph(mutants), cgraph(mutants);
+		MSGraph graph(mutants);
 		constructMSG(graph, mutants, tests);
 		TypedMutantSet tmutants(graph);
-		load_test_coverage(cgraph, mutants, tests);
 
 		// output MSG
 		std::ofstream out(prefix + prname + "/statistics.txt");
@@ -719,7 +728,7 @@ int main() {
 		tout.output_mutants(tmutants);
 		tout.output_distribution(tmutants);
 		tout.output_templates(tmutants);
-		tout.output_classification(tmutants, cgraph);
+		tout.output_classification(tmutants);
 		tout.close();
 	}
 

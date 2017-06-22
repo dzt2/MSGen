@@ -95,8 +95,8 @@ public:
 	void output_distribution(const TypedMutantSet &);
 	/* generate ../analysis/stubborn_questions.txt */
 	void output_templates(const TypedMutantSet &);
-	/* generate ../analysis/classifications.txt from typed mutants and coverage graph */
-	void output_classification(const TypedMutantSet &, const MSGraph &);
+	/* generate ../analysis/classifications.txt from typed mutants */
+	void output_classification(const TypedMutantSet &);
 
 	/* close the outputter */
 	void close() { dir = nullptr; }

@@ -125,6 +125,7 @@
     <ClInclude Include="submut.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="autotest.cpp" />
     <ClCompile Include="bitseq.cpp" />
     <ClCompile Include="cfile.cpp" />
     <ClCompile Include="cmutant.cpp" />
