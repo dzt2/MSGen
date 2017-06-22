@@ -45,31 +45,32 @@ int main() {
 	std::cout << "Press any key to exit...";
 	getchar(); exit(0);
 }
+*/
 
 /*
 int main() {
-std::string prefix = "../../../MyData/SiemensSuite/";
-std::string prname = "Day";
-std::ofstream out(prefix + prname + "/tsuite");
+	std::string prefix = "../../../MyData/SiemensSuite/";
+	std::string prname = "Day";
+	std::ofstream out(prefix + prname + "/tsuite");
 
-int years[10] = {-1, -5, 0, 400, 100, 700, 32, 128, 79, 21};
-int months[15] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,-6};
-int days[3] = { 1, 17, 27 };
+	int years[10] = {-1, -5, 0, 400, 100, 700, 32, 128, 79, 21};
+	int months[15] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,-6};
+	int days[5] = { 1, 0, -1, 27, 16 };
 
-for (int i = 0; i < 10; i++) {
-for (int j = 0; j < 15; j++) {
-for (int k = 0; k < 3; k++) {
-int year = years[i];
-int month = months[j];
-int day = days[k];
+	for (int i = 0; i < 10; i++) {
+		for (int j = 0; j < 15; j++) {
+			for (int k = 0; k < 5; k++) {
+				int year = years[i];
+				int month = months[j];
+				int day = days[k];
 
-out << year << "\t" << month << "\t" << day << "\n";
-}
-}
-}
+				out << year << "\t" << month << "\t" << day << "\n";
+			}
+		}
+	}
 
-out << std::endl; out.close();
-std::cout << "Press any key to exit...";
-getchar(); exit(0);
+	out << std::endl; out.close();
+	std::cout << "Press any key to exit...";
+	getchar(); exit(0);
 }
 */

@@ -939,11 +939,11 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 }
 
 /* test main method */
-
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "triangle"; TestType ttype = TestType::general;
+	std::string prname = "Day"; TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
@@ -998,3 +998,4 @@ int main() {
 	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
 }
+*/
