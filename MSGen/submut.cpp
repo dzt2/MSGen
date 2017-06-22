@@ -490,7 +490,10 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants) {
 	const MSGraph & graph = tmutants.get_graph(); std::string line;
 	const TextBuild & text = *(mspace.get_code_file().get_text());
 
-	out << "id\tcluster\tdegree\toperator\tline\toriginal\treplace\tcategory\n";
+	/* title */
+	out << "id\tcluster\tdegree\toperator\tline\toriginal\treplace\tcategory\tmutype\timplement\n";
+
+	std::string mutype, implement;	/* for generating mutant type(based on user-defined) */
 	for (mid = 0; mid < num; mid++) {
 		if (all_mutants.has_mutant(mid) && graph.has_cluster_of(mid)) {
 			Mutant & mutant = mspace.get_mutant(mid);
@@ -499,28 +502,284 @@ void TypedOutputter::output_classification(const TypedMutantSet & tmutants) {
 			MuCluster & cluster = graph.get_cluster_of(mid);
 			const CodeLocation & location = mutation.get_location();
 
+			/* id | cid | oprt | line */
 			out << mutant.get_id() << "\t"
 				<< cluster.get_id() << "\t"
 				<< cluster.get_score_degree() << "\t"
 				<< mutant.get_operator() << "\t"
 				<< text.lineOfIndex(location.get_bias()) << "\t";
 
+			/* original | replace */
 			line = mutation.get_location().get_text_at();
 			trim_lines(line); out << line << "\t";
 			line = mutation.get_replacement();
 			trim_lines(line); out << line << "\t";
 
+			/* category */
 			if (stubborn_set.has_mutant(mid))
 				out << "stubborn\t";
 			else if (subsuming_set.has_mutant(mid))
 				out << "subsuming\t";
 			else out << "subsumed\t";
 
-			out << "\n";
+			/* mutype | implement */
+			this->output_categories(mutant.get_operator(), mutype, implement);
+			out << mutype << "\t" << implement;
+
+			/* newline */ out << "\n";
 		}
 	}
 
-	out << std::endl; out.close();
+	/* close output */ out << std::endl; out.close();
+}
+void TypedOutputter::output_categories(const std::string & oprt, 
+	std::string & mtype, std::string & implement) {
+	/* initialization */ 
+	mtype = "error"; implement = "?";
+	
+	if (oprt == "I-CovAllEdg") {	/* trap_on_true | trap_on_false */
+		mtype = "trap-condition";
+	}
+	else if (oprt == "I-CovAllNod") {	/* trap | trap_on_stat */
+		mtype = "trap-statement";
+	}
+	else if (oprt == "I-DirVarAriNeg") {	/* (x, -x) */
+		mtype = "neg-number";
+		implement = "(x, -x)";
+	}
+	else if (oprt == "I-DirVarBitNeg") {	/* (x, ~x) */
+		mtype = "neg-bits";
+		implement = "(x, ~x)";
+	}
+	else if (oprt == "I-DirVarLogNeg") {	/* (x, !x) */
+		mtype = "neg-bool";
+		implement = "(x, !x)";
+	}
+	else if (oprt == "I-DirVarIncDec") {	/* ++x --x */
+		mtype = "incdec-reference";
+	}
+	else if (oprt == "I-DirVarRepCon") {	/* (x, c) */
+		mtype = "rep-operand";
+		implement = "(x, c)";
+	}
+	else if (oprt == "I-DirVarRepExt") {	/* (x, x) */
+		mtype = "rep-operand";
+		implement = "(x, x)";
+	}
+	else if (oprt == "I-DirVarRepGlo") {	/* (x, x) */
+		mtype = "rep-operand";
+		implement = "(x, x)";
+	}
+	else if (oprt == "I-DirVarRepLoc") {	/* (x, x) */
+		mtype = "rep-operand";
+		implement = "(x, x)";
+	}
+	else if (oprt == "I-DirVarRepReq") {	/* (x, c) */
+		mtype = "rep-operand";
+		implement = "(x, c)";
+	}
+	else if (oprt == "II-ArgAriNeg") {	/* (x, -x) for argument */
+		mtype = "neg-number";
+		implement = "(x, -x)";
+	}
+	else if (oprt == "II-ArgBitNeg") {	/* (x, ~x) for argument */
+		mtype = "neg-bits";
+		implement = "(x, ~x)";
+	}
+	else if (oprt == "II-ArgLogNeg") {	/* (x, !x) for argument */
+		mtype = "neg-bool";
+		implement = "(x, !x)";
+	}
+	else if (oprt == "II-ArgIncDec") {	/* SUCC | PRED for argument */
+		mtype = "incdec-value";
+	}
+	else if (oprt == "II-ArgRepReq") {	/* (x, c) for argument */
+		mtype = "rep-operand";
+		implement = "(x, c)";
+	}
+	else if (oprt == "II-FunCalDel") {	/* (x, c) for return-value */
+		mtype = "rep-operand";	/* TODO: may be delete-stmt */
+		implement = "(x, c)";	
+	}
+	else if (oprt == "I-IndVarAriNeg") {	/* (c, -c) for constant or return-value */
+		mtype = "neg-number";
+		implement = "(c, -c)";
+	}
+	else if (oprt == "I-IndVarBitNeg") {	/* (c, ~c) for constant or return-value */
+		mtype = "neg-bits";
+		implement = "(c, ~c)";
+	}
+	else if (oprt == "I-IndVarLogNeg") {	/* (c, !c) for constant or return-value */
+		mtype = "neg-bool";
+		implement = "(c, !c)";
+	}
+	else if (oprt == "I-IndVarIncDec") {	/*SUCC|PRED for constant, or ++x | --x for return-value */
+		mtype = "incdec-value";
+	}
+	else if (oprt == "I-IndVarRepCon") {	/* (c, c) for return-value or constant */
+		mtype = "rep-operand";
+		implement = "(c, c)";
+	}
+	else if (oprt == "I-IndVarRepExt") {	/* (c, x) for return-value or constant, or left-value! */
+		mtype = "rep-operand";	/* or rep-left-operand */
+		implement = "(c, x)";	/* or (x, x) */
+	}
+	else if (oprt == "I-IndVarRepGlo") {	/* (c, x) for return-value or constant, or left-value! */
+		mtype = "rep-operand";	/* or rep-left-operand */
+		implement = "(c, x)";	/* or (x, x) */
+	}
+	else if (oprt == "I-IndVarRepLoc") {	/* (c, x) for return-value or constant, or left-value! */
+		mtype = "rep-operand";	/* or rep-left-operand */
+		implement = "(c, x)";	/* or (x, x) */
+	}
+	else if (oprt == "I-IndVarRepReq") {	/* (c, c) for constant, or (x, c) for return-value */
+		mtype = "rep-operand";
+		implement = "(c, c)";
+	}
+	else if (oprt == "I-RetStaDel") {	/* delete return-statement */
+		mtype = "del-statement";
+		implement = "ret";
+	}
+	else if (oprt == "u-Cccr") {	/* (c, c) for any constant occurrence */
+		mtype = "rep-operand";	/* may be incdec-value */
+		implement = "(c, c)";
+	}
+	else if (oprt == "u-Ccsr") {	/* (x, c) for constant occurrence */
+		mtype = "rep-operand";
+		implement = "(x, c)";
+	}
+	else if (oprt == "u-CRCR") {	/* (x, c) for constant occurrence */
+		mtype = "rep-operand";
+		implement = "(x, c)";
+	}
+	else if (oprt == "u-OAAN") {	/* {+ - * / %} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OABN") {	/* {+ - * / %} --> {& | ^} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OALN") {	/* {+ - * / %} --> {&& ||} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OARN") {	/* {+ - * / %} --> {> >= == != <= <} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OASN") {/* {+ - * / %} --> {>> <<} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OCNG") {	/* (x, !x) for predicate or condition */
+		mtype = "neg-bool";
+		implement = "(x, !x)";
+	}
+	else if (oprt == "u-OEAA") {	/* {=} --> {+= -= *= /= %= } */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OEBA") {	/* {=} --> {&= |= ^=} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OESA") {	/* {=} --> {>>= <<=} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OLAN") {	/* {&& ||} --> {+ - * / %} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OLBN") {	/* {&& ||} --> {& | ^} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OLLN") {	/* {&& ||} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OLNG") {	/* (e, !e) for condition expression */
+		mtype = "neg-value";
+		implement = "(x, !x)";
+	}
+	else if (oprt == "u-OLRN") {	/* {&& ||} --> {> >= == != <= <} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-OLSN") {	/* {&& ||} --> {>> <<} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-ORAN") {	/* {&& ||} --> {+ - * / %} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-ORBN") {	/* {&& ||} --> {& | ^} */
+		mtype = "rep-operator";
+	}	
+	else if (oprt == "u-ORLN") {	/* {> >= == != <= <} --> {&& ||} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-ORRN") {	/* {> >= == != <= <} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-ORSN") {	/* {> >= == != <= <} --> {>> <<} */
+		mtype = "rep-operator";
+	}
+	else if (oprt == "u-SRSR") {	/* (stmt, exit) */
+		mtype = "rep-statement";
+		implement = "(stmt, ret)";
+	}
+	else if (oprt == "u-SSDL") {	/* delete stmt */
+		mtype = "del-statement";
+		implement = "stmt";
+	}
+	else if (oprt == "u-STRI") {	/* utrap-on-true, utrap-on-false */
+		mtype = "trap-condition";
+	}
+	else if (oprt == "u-STRP") {	/* trap-stmt */
+		mtype = "trap-statement";
+	}
+	else if (oprt == "u-VDTR") {	/* trap-positive, trap-zero, trap-negative */
+		mtype = "trap-value";
+	}
+	else if (oprt == "u-VGSR") {	/* (x, x) for variable */
+		mtype = "rep-operand";	/* may be rep-left-operand */
+		implement = "(x, x)";
+	}
+	else if (oprt == "u-VLSR") {	/* (x, x) for variable */
+		mtype = "rep-operand";	/* may be rep-left-operand */
+		implement = "(x, x)";
+	}
+	else if (oprt == "u-VTWD") {	/* PRED SUCC for variable */
+		mtype = "incdec-value";
+	}
+	else if (oprt == "u-Oido") {	/* x++ --> x-- */
+		mtype = "incdec-reference";
+	}
+	else if (oprt == "II-ArgStcAli") {	/* replace arguments in function */
+		mtype = "rep-operand";
+		implement = "(x, x)";
+	}
+	else if (oprt == "I-DirVarRepPar") {	/* (x, x) for variable used */
+		mtype = "rep-operand";
+		implement = "(x, x)";
+	}
+	else if (oprt == "I-IndVarRepPar") {	/* (x, x) for constant, return-value or left-value */
+		mtype = "rep-operand";
+		implement = "(c, x)";
+	}
+	else if(oprt == "u-SSWM") { /* unknown */ 
+		mtype = "ins-statement";
+		implement = "goto flag";
+	}
+	else if (oprt == "II-ArgDel") {	/* delete argument in function call */ }
+	else if (oprt == "u-SWDD") {	/* while --> do*/
+		mtype = "rep-statement";
+		implement = "(while, do)";
+	}
+	else if (oprt == "u-SBRC") {	/* break --> continue */
+		mtype = "rep-statement";
+		implement = "(break, continue)";
+	}
+	/* exception case */
+	else {
+		/*CError error(CErrorType::InvalidArguments, 
+			"TypedOutputter::output_categories", 
+			"Invalid operator: \"" + oprt + "\"");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::InvalidArguments);*/
+	}
+
+	/* return */ return;
 }
 
 /* APIs for project models */
@@ -684,8 +943,7 @@ static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "Day";  
-	TestType ttype = TestType::general;
+	std::string prname = "triangle"; TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
@@ -724,6 +982,7 @@ int main() {
 		out.close();
 
 		// create TypedMutantSet
+		std::cout << "Begin to output MSG..." << std::endl;
 		TypedOutputter tout; tout.open(root);
 		tout.output_mutants(tmutants);
 		tout.output_distribution(tmutants);

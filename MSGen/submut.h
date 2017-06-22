@@ -106,6 +106,8 @@ private:
 	File * dir;
 	/* remove all '\n' from the code */
 	void trim_lines(std::string &);
+	/* output category for mutant by operator name */
+	void output_categories(const std::string &, std::string &, std::string &);
 
 protected:
 	/* output mutants to specified file */
