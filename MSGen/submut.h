@@ -7,13 +7,15 @@
 	-Purp : to define interface to compute and analyze subsuming mutations 
 	-Clas :
 		[1] TypedMutantSet
-		[2] 
+		[2] TypedOutputter
+		[4] GreedyTester
 */
 
 #include "mgraph.h"
 
 class TypedMutantSet;
 class TypedOutputter;
+class GreedyTester;
 
 /* Mutants in MSG are classified in three types:
 	I.	stubborn mutants: cannot be killed by any tests in finite T;
@@ -84,19 +86,12 @@ public:
 
 	/* set the ../ where defines director of "analysis" for storing generated files */
 	void open(const File &);
-	/* to generate ../analysis/stubborn_mutants.txt | 
-		hard_mutants.txt | subsuming_mutants.txt */
-	void output_mutants(const TypedMutantSet &);
-	/* to generate ../analysis/dist_xxx.txt, including:
-		1) dist_operator.txt
-		2) dist_location.txt
-		3) dist_operator_location.txt
-	*/
-	void output_distribution(const TypedMutantSet &);
-	/* generate ../analysis/stubborn_questions.txt */
-	void output_templates(const TypedMutantSet &);
-	/* generate ../analysis/classifications.txt from typed mutants */
+	/* generate ../analysis/class.txt from typed mutants */
 	void output_classification(const TypedMutantSet &);
+	/* generate ../analysis/summary.txt */
+	void output_summary(const TypedMutantSet &);
+	/* output ../analysis/graph.txt */
+	void output_graph(const MSGraph &);
 
 	/* close the outputter */
 	void close() { dir = nullptr; }
@@ -110,20 +105,4 @@ private:
 	void output_categories(const std::string &, std::string &, std::string &);
 
 protected:
-	/* output mutants to specified file */
-	void output_mutants(const MutantSet &, const MSGraph &, std::ostream &);
-
-	/* generate ../analysis/dist_operator.txt */
-	void output_distribute_operator(const TypedMutantSet &, std::ostream &);
-	/* generate ../analysis/dist_location.txt */
-	void output_distribute_location(const TypedMutantSet &, std::ostream &);
-	/* generate ../analysis/dist_oprt_location.txt */
-	void output_distribute_operator_location(const TypedMutantSet &, std::ostream &);
-
-	/* generate ../analysis/stubborn_question.txt */
-	void output_stubborn_questions(const MutantSet &, std::ostream &);
-	/* generate ../analysis/subsuming_question.txt */
-	void output_subsuming_questions(const MutantSet &, const MSGraph & graph, std::ostream &);
 };
-
-

@@ -1,3 +1,8 @@
+/*
+	File : autotest.cpp
+	Aim  : to generate user-specified test suite for programs in Siemens Suite
+*/
+
 #include <iostream>
 #include <fstream>
 

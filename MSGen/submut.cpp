@@ -134,341 +134,6 @@ void TypedOutputter::open(const File & root) {
 		CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
 	}
 }
-void TypedOutputter::output_mutants(const TypedMutantSet & tmutants) {
-	std::ofstream out1(dir->get_path() + "/stubborn_mutants.txt");
-	output_mutants(tmutants.get_stubborn_mutants(), 
-		tmutants.get_graph(), out1); out1.close();
-
-	std::ofstream out2(dir->get_path() + "/hard_mutants.txt");
-	output_mutants(tmutants.get_hard_mutants(), 
-		tmutants.get_graph(), out2); out2.close();
-
-	std::ofstream out3(dir->get_path() + "/subsuming_mutants.txt");
-	output_mutants(tmutants.get_subsuming_mutants(), 
-		tmutants.get_graph(), out3); out3.close();
-}
-void TypedOutputter::output_distribution(const TypedMutantSet & tmutants) {
-	std::ofstream out1(dir->get_path() + "/mutant_operator.txt");
-	output_distribute_operator(tmutants, out1); out1.close();
-
-	std::ofstream out2(dir->get_path() + "/mutant_location.txt");
-	output_distribute_location(tmutants, out2); out2.close();
-
-	std::ofstream out3(dir->get_path() + "/mutant_operator_location.txt");
-	output_distribute_operator_location(tmutants, out3); out3.close();
-}
-void TypedOutputter::output_templates(const TypedMutantSet & tmutants) {
-	std::ofstream out1(dir->get_path() + "/stubborn_quest.txt");
-	output_stubborn_questions(tmutants.get_stubborn_mutants(), out1);
-	out1.close();
-
-	std::ofstream out2(dir->get_path() + "/subsuming_quest.txt");
-	output_subsuming_questions(tmutants.get_subsuming_mutants(), 
-		tmutants.get_graph(), out2); out2.close();
-}
-void TypedOutputter::output_mutants(const MutantSet & mutants, 
-	/* declarations */
-	const MSGraph & graph, std::ostream & out) {
-	MutantSpace & mspace = mutants.get_space();
-	const TextBuild & text = *(mspace.get_code_file().get_text());
-
-	/* iterate all the mutants in the set */
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		if (mutants.has_mutant(mid)) {
-			/* get the next mutants */
-			Mutant & mutant = mspace.get_mutant(mid);
-			const std::string & oprt = mutant.get_operator();
-			MuCluster & cluster = graph.get_cluster_of(mid);
-
-			/* mutant-summary */
-			out << "Mutant (" << mutant.get_id() << ")\n";
-			out << "\toperator: " << oprt << "\n";
-			out << "\tcluster: " << cluster.get_id() << "\n";
-			out << "\tdegree: " << cluster.get_score_degree() << "\n";
-
-			/* mutations for mutant */
-			for (int i = 0; i < mutant.get_orders(); i++) {
-				const Mutation & mutation = mutant.get_mutation(i);
-				const CodeLocation & location = mutation.get_location();
-
-				out << "\tmutation[" << i << "]:\n";
-				out << "\t\t-location: " << 
-					text.lineOfIndex(location.get_bias()) << " line\n";
-				out << "\t\t-original: \"" << location.get_text_at() << "\"\n";
-				out << "\t\t-replace: \"" << mutation.get_replacement() << "\"\n";
-			}
-
-			out << "\n";	/* end line */
-		}
-	}
-}
-void TypedOutputter::output_distribute_operator(
-	const TypedMutantSet & tmutants, std::ostream & out) {
-	/* declarations */
-	const MutantSet & all_mutants = tmutants.get_mutants();
-	const MutantSet & stubborn_mutants = tmutants.get_stubborn_mutants();
-	const MutantSet & subsuming_mutants = tmutants.get_subsuming_mutants();
-	std::map<std::string, int *> oprt_numbers;
-
-	const MutantSpace & mspace = all_mutants.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		/* get next mutant */
-		Mutant & mutant = mspace.get_mutant(mid);
-		const std::string & oprt = mutant.get_operator();
-
-		/* get the numbers for counting */
-		int * numbers;
-		if (oprt_numbers.count(oprt) == 0) {
-			numbers = new int[3];
-			numbers[0] = 0; 
-			numbers[1] = 0;
-			numbers[2] = 0; 
-			oprt_numbers[oprt] = numbers;
-		}
-		else {
-			auto iter = oprt_numbers.find(oprt);
-			numbers = iter->second;
-		}
-
-		/* count the numbers */
-		if (all_mutants.has_mutant(mid)) {
-			/* stubborn mutants */
-			if (stubborn_mutants.has_mutant(mid))
-				numbers[0]++;
-			/* subsuming mutants */
-			else if (subsuming_mutants.has_mutant(mid))
-				numbers[1]++;
-			/* subsumed mutants */
-			else numbers[2]++;	
-		}
-	}
-
-	/* output operators */
-	out << "operator\tStubborn\tSubsuming\tSubsumed\tTotal\n";
-	auto beg = oprt_numbers.begin(), end = oprt_numbers.end();
-	while (beg != end) {
-		const std::string & oprt = beg->first;
-		int * numbers = beg->second; beg++;
-
-		out << oprt << "\t" << numbers[0] << "\t";
-		out << numbers[1] << "\t" << numbers[2] << "\t";
-		out << numbers[0] + numbers[1] + numbers[2] << "\n";
-
-		delete numbers;
-	}
-	out << std::endl;
-}
-void TypedOutputter::output_distribute_location(
-	const TypedMutantSet & tmutants, std::ostream & out) {
-	/* declarations */
-	const MutantSet & all_mutants = tmutants.get_mutants();
-	const MutantSet & stubborn_mutants = tmutants.get_stubborn_mutants();
-	const MutantSet & subsuming_mutants = tmutants.get_subsuming_mutants();
-	std::map<std::string, int *> key_numbers;
-	std::map<std::string, const CodeLocation *> key_locations;
-
-	/* count the numbers */
-	const MutantSpace & mspace = all_mutants.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		/* get next mutant and its location-key */
-		Mutant & mutant = mspace.get_mutant(mid);
-		const Mutation & mutation = 
-			mutant.get_mutation(mutant.get_orders() - 1);
-		const CodeLocation & location = mutation.get_location();
-		std::string key = std::to_string(location.get_bias());
-		key += ":" + std::to_string(location.get_length());
-
-		/* get numbers for counting */
-		int * numbers;
-		if (key_numbers.count(key) == 0) {
-			numbers = new int[3];
-			numbers[0] = 0;
-			numbers[1] = 0;
-			numbers[2] = 0;
-			key_numbers[key] = numbers;
-			key_locations[key] = &location;
-		}
-		else {
-			auto iter = key_numbers.find(key);
-			numbers = iter->second;
-		}
-
-		/* couting for mutants */
-		if (all_mutants.has_mutant(mid)) {
-			/* for stubborn mutants */
-			if (stubborn_mutants.has_mutant(mid))
-				numbers[0]++;
-			/* for subsuming mutants */
-			else if (subsuming_mutants.has_mutant(mid))
-				numbers[1]++;
-			/* for subsumed mutants */
-			else numbers[2]++;
-		}
-	} /* end for */
-
-	/* output lines */
-	const TextBuild & text = *(mspace.get_code_file().get_text());
-	out << "bias\tlength\tline\tstubborn\tsubsuming\tsubsumed\ttotal\n";
-	auto beg = key_numbers.begin(), end = key_numbers.end();
-	while (beg != end) {
-		/* get next line */
-		const std::string & key = beg->first;
-		int * numbers = beg->second; beg++;
-		auto iter = key_locations.find(key);
-		const CodeLocation & loc = *(iter->second);
-
-		/* output line */
-		out << loc.get_bias() << "\t" << loc.get_length() << "\t";
-		out << text.lineOfIndex(loc.get_bias()) << "\t" << numbers[0];
-		out << "\t" << numbers[1] << "\t" << numbers[2] << "\t";
-		out << numbers[0] + numbers[1] + numbers[2] << "\n";
-
-		delete numbers;
-	}
-	out << std::endl;
-}
-void TypedOutputter::output_distribute_operator_location(
-	const TypedMutantSet & tmutants, std::ostream & out) {
-	/* declarations */
-	const MutantSet & all_mutants = tmutants.get_mutants();
-	const MutantSet & stubborn_mutants = tmutants.get_stubborn_mutants();
-	const MutantSet & subsuming_mutants = tmutants.get_subsuming_mutants();
-	std::map<std::string, int *> key_numbers;
-	std::map<std::string, std::string> key_operators;
-	std::map<std::string, const CodeLocation *> key_locations;
-
-	/* count the numbers */
-	const MutantSpace & mspace = all_mutants.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		/* get next mutant and operator-location-key */
-		Mutant & mutant = mspace.get_mutant(mid);
-		const Mutation & mutation =
-			mutant.get_mutation(mutant.get_orders() - 1);
-		const std::string oprt = mutant.get_operator();
-		const CodeLocation & location = mutation.get_location();
-		
-		/* get the key for this mutant */
-		std::string key = std::to_string(location.get_bias());
-		key += ":" + std::to_string(location.get_length());
-		key += ":" + oprt;
-
-		/* get numbers for counting */
-		int * numbers;
-		if (key_numbers.count(key) == 0) {
-			numbers = new int[3];
-			numbers[0] = 0;
-			numbers[1] = 0;
-			numbers[2] = 0;
-			key_numbers[key] = numbers;
-			key_operators[key] = oprt;
-			key_locations[key] = &location;
-		}
-		else {
-			auto iter = key_numbers.find(key);
-			numbers = iter->second;
-		}
-
-		/* couting for mutants */
-		if (all_mutants.has_mutant(mid)) {
-			/* for stubborn mutants */
-			if (stubborn_mutants.has_mutant(mid))
-				numbers[0]++;
-			/* for subsuming mutants */
-			else if (subsuming_mutants.has_mutant(mid))
-				numbers[1]++;
-			/* for subsumed mutants */
-			else numbers[2]++;
-		}
-	} /* end for */
-
-	/* output */
-	const TextBuild & text = *(mspace.get_code_file().get_text());
-	out << "operator\tbias\tlength\tline\tstubborn\tsubsuming\tsubsumed\ttotal\n";
-	auto beg = key_numbers.begin(), end = key_numbers.end();
-	while (beg != end) {
-		/* get next line */
-		const std::string & key = beg->first;
-		int * numbers = beg->second; beg++;
-		auto iter = key_locations.find(key);
-		const CodeLocation & loc = *(iter->second);
-		const std::string & oprt =
-			(key_operators.find(key)->second);
-
-		/* output line */
-		out << oprt << "\t" << loc.get_bias() << "\t" << loc.get_length() << "\t";
-		out << text.lineOfIndex(loc.get_bias()) << "\t" << numbers[0] << "\t";
-		out << numbers[1] << "\t" << numbers[2] << "\t";
-		out << numbers[0] + numbers[1] + numbers[2] << "\n";
-
-		delete numbers;	/* release numbers */
-	}
-	out << std::endl;
-}
-void TypedOutputter::output_stubborn_questions(
-	const MutantSet & mutants, std::ostream & out) {
-	const MutantSpace & mspace = mutants.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	const TextBuild & text = *(mspace.get_code_file().get_text());
-
-	out << "id\toperator\tbias\tlength\tline\ttype\ttests\n";
-	for (mid = 0; mid < num; mid++) {
-		if (mutants.has_mutant(mid)) {
-			/* get next mutant and their operators */
-			Mutant & mutant = mspace.get_mutant(mid);
-			const std::string & oprt = mutant.get_operator();
-			size_t orders = mutant.get_orders();
-			const Mutation & mutation = mutant.get_mutation(orders - 1);
-			const CodeLocation & location = mutation.get_location();
-
-			/* output */
-			out << mutant.get_id() << "\t";
-			out << oprt << "\t" << location.get_bias() << "\t";
-			out << location.get_length() << "\t";
-			out << text.lineOfIndex(location.get_bias()) << "\t?\t?\n";
-		}
-	}
-	out << std::endl;
-}
-void TypedOutputter::output_subsuming_questions(
-	const MutantSet & mutants, const MSGraph & graph, std::ostream & out) {
-	/* declarations */
-	const MutantSpace & mspace = mutants.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	const TextBuild & text = *(mspace.get_code_file().get_text());
-	std::string line;
-
-	/* title */ 
-	out << "id\toperator\tline\toriginal\treplace\tcluster\tdegree"
-		<< "\tmutated object\tmutated type\tmutated operation"
-		<< "\tcontext object\tcontext type\tcontext point\n";
-	for (mid = 0; mid < num; mid++) {
-		if (mutants.has_mutant(mid)) {
-			Mutant & mutant = mspace.get_mutant(mid);
-			const Mutation & mutation =
-				mutant.get_mutation(mutant.get_orders() - 1);
-			MuCluster & cluster = graph.get_cluster_of(mid);
-
-			out << mutant.get_id() << "\t";
-			out << mutant.get_operator() << "\t";
-			out << text.lineOfIndex(mutation.get_location().get_bias()) << "\t";
-			
-			line = mutation.get_location().get_text_at();
-			trim_lines(line); out << line << "\t";
-			line = mutation.get_replacement();
-			trim_lines(line); out << line << "\t";
-
-			out << cluster.get_id() << "\t";
-			out << cluster.get_score_degree() << "\t";
-
-			out << "\n";
-		}
-	}
-	out << std::endl;
-}
 void TypedOutputter::trim_lines(std::string & line) {
 	std::string line2; int length = line.length();
 	for (int i = 0; i < length; i++) {
@@ -479,7 +144,7 @@ void TypedOutputter::trim_lines(std::string & line) {
 	line = line2;
 }
 void TypedOutputter::output_classification(const TypedMutantSet & tmutants) {
-	std::ofstream out(dir->get_path() + "/mut_classification.txt");
+	std::ofstream out(dir->get_path() + "/muclass.txt");
 
 	const MutantSet & all_mutants = tmutants.get_mutants();
 	const MutantSet & stubborn_set = tmutants.get_stubborn_mutants();
@@ -781,6 +446,80 @@ void TypedOutputter::output_categories(const std::string & oprt,
 
 	/* return */ return;
 }
+void TypedOutputter::output_summary(const TypedMutantSet & tmutants) {
+	std::ofstream out(dir->get_path() + "/summary.txt");
+
+	const MSGraph & graph = tmutants.get_graph();
+	size_t M = 0, E = 0, C = graph.size(), 
+		H = graph.get_hierarchy().size_of_degress();
+	MuCluster::ID cid = 0, num = graph.size();
+	while (cid < num) {
+		MuCluster & cluster = graph.get_cluster(cid++);
+		M += cluster.get_class().size();
+		E += cluster.get_ou_port().get_degree();
+	}
+
+	out << "Summary for mutant subsumption graph:\n";
+	out << "\t#M: " << M << "\n";
+	out << "\t#C: " << C << "\n";
+	out << "\t#H: " << H << "\n";
+	out << "\t#S: " << E << "\n\n";
+
+	size_t Sm, Sc, Sh, Sa, Se;
+	Sm = M * (M - 1) / 2;
+	Sc = C * (C - 1) / 2;
+	Sa = times;	/* efficiency measurement */
+	Se = E; 
+
+	const MuHierarchy & hierarchy = graph.get_hierarchy();
+	int hlength = hierarchy.size_of_degress() - 1;
+	size_t cnt = 0, level_num; Sh = 0;
+	while (hlength >= 0) {
+		level_num = hierarchy.get_clusters_at(hlength--).size();
+		Sh += level_num * cnt; cnt += level_num;
+	}
+
+	out << "Summary for algorithm efficiency analysis:\n";
+	out << "\tS[mutant] \t= " << Sm << "\n";
+	out << "\tS[cluster] \t= " << Sc << "\n";
+	out << "\tS[hierarchy]\t= " << Sh << "\n";
+	out << "\tS[algorithm]\t= " << Sa << "\n";
+	out << "\tS[minimal] \t= " << Se << "\n\n";
+
+	out << "Summary for subsuming mutants:\n";
+	out << "\tEntire: " << tmutants.get_mutants().number_of_mutants() << "mutants; " << C << " clusters;\n";
+	out << "\tStubborn: " << tmutants.get_stubborn_mutants().number_of_mutants() << " mutants; "
+		<< (tmutants.get_stubborn_mutants().number_of_mutants() != 0) << " clusters;\n";
+	out << "\tSubsuming: " << tmutants.get_subsuming_mutants().number_of_mutants() << " mutants; "
+		<< tmutants.get_subsuming_clusters().size() << " clusters;\n";
+	out << "\tSubsumed: " << tmutants.get_subsumed_mutants().number_of_mutants() << " mutants; "
+		<< tmutants.get_subsumed_clusters().size() << " clusters;\n";
+
+	out << std::endl; out.close();
+}
+void TypedOutputter::output_graph(const MSGraph & graph) {
+	std::ofstream out(dir->get_path() + "/msgraph.txt");
+
+	out << "cluster\tedges\n";
+	MuCluster::ID cid = 0, num = graph.size();
+	while (cid < num) {
+		const MuCluster & cluster = graph.get_cluster(cid++);
+		out << cluster.get_id() << "\t";
+
+		const std::vector<MuSubsume> & edges 
+			= cluster.get_ou_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		out << "{ ";
+		while (beg != end) {
+			const MuSubsume & edge = *(beg++);
+			const MuCluster & trg = edge.get_target();
+			out << trg.get_id() << "; ";
+		}
+		out << "}\n";
+	}
+
+	out << std::endl; out.close();
+}
 
 /* APIs for project models */
 /* load the tests and mutants into the project */
@@ -861,89 +600,12 @@ static void load_test_coverage(MSGraph & graph, MutantSet & mutants, TestSet & t
 	/* return */ return;
 }
 
-/* output APIs */
-static void printMSG(const MSGraph & graph, std::ostream & out) {
-	size_t edges = 0;
-	MuCluster::ID cid = 0, num = graph.size();
-	while (cid < num) {
-		MuCluster & cluster = graph.get_cluster(cid++);
-		edges += cluster.get_ou_port().get_degree();
-	}
-
-	out << "Total Summary of Graph\n";
-	out << "\t(1) Clusters: \t" << graph.size() << "\n";
-	out << "\t(2) Hierarchy:\t" << graph.get_hierarchy().size_of_degress() << "\n";
-	out << "\t(3) Subsumes: \t" << edges << "\n";
-
-	out << "\nEdge map tables:\n";
-	for (cid = 0; cid < num; cid++) {
-		MuCluster & cluster = graph.get_cluster(cid);
-		out << "\t" << cluster.get_id() << "\t--> {";
-
-		const std::vector<MuSubsume> & edges 
-			= cluster.get_ou_port().get_edges();
-		auto beg = edges.begin(), end = edges.end();
-		while (beg != end) {
-			const MuSubsume & edge = *(beg++);
-			MuCluster & trg = edge.get_target();
-			out << trg.get_id() << "; ";
-		}
-		out << "}\n";
-	}
-	out << std::endl;
-}
-static void printTMS(TypedMutantSet & tmutants, std::ostream & out) {
-	out << " \tStubborn\tSubsuming\tHard\tSubsumed\tTotal\n";
-	out << "mutants\t" << tmutants.get_stubborn_mutants().number_of_mutants();
-	out << "\t" << tmutants.get_subsuming_mutants().number_of_mutants();
-	out << "\t" << tmutants.get_hard_mutants().number_of_mutants();
-	out << "\t" << tmutants.get_subsumed_mutants().number_of_mutants();
-	out << "\t" << tmutants.get_mutants().number_of_mutants() << "\n";
-
-	out << "clusters\t";
-	tmutants.get_stubborn_cluster();
-	out << "1\t";
-	out << tmutants.get_subsuming_clusters().size() << "\t";
-	out << tmutants.get_hard_clusters().size() << "\t";
-	out << tmutants.get_subsumed_clusters().size() << "\t";
-	out << tmutants.get_graph().size() << "\n";
-}
-static void efficiencyMSG(const MSGraph & graph, std::ostream & out) {
-	out << "Efficiency Analysis for Mutant Subsumption Graph\n";
-
-	size_t C = graph.size();
-	size_t M = graph.get_class_set().get_mutants().number_of_mutants();
-	size_t Sm = M * (M - 1) / 2, Sc = C * (C - 1) / 2, Sh, Sa, Se;
-	
-	const MuHierarchy & hierarchy = graph.get_hierarchy();
-	int hlength = hierarchy.size_of_degress() - 1; 
-	size_t cnt = 0, level_num; Sh = 0;
-	while (hlength >= 0) {
-		level_num = hierarchy.get_clusters_at(hlength--).size();
-		Sh += level_num * cnt; cnt += level_num;
-	}
-
-	Sa = times;
-
-	MuCluster::ID cid = 0, cnum = graph.size(); Se = 0;
-	while (cid < cnum) {
-		MuCluster & ci = graph.get_cluster(cid++);
-		Se += ci.get_ou_port().get_degree();
-	}
-
-	out << "\tS[mutants] = \t" << Sm << "\n";
-	out << "\tS[cluster] = \t" << Sc << "\n";
-	out << "\tS[hierarchy] = \t" << Sh << "\n";
-	out << "\tS[algorithm] = \t" << Sa << "\n";
-	out << "\tS[minimal] = \t" << Se << "\n";
-}
-
 /* test main method */
-/*
+
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "Day"; TestType ttype = TestType::general;
+	std::string prname = "triangle"; TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
@@ -973,20 +635,11 @@ int main() {
 		constructMSG(graph, mutants, tests);
 		TypedMutantSet tmutants(graph);
 
-		// output MSG
-		std::ofstream out(prefix + prname + "/statistics.txt");
-		out << "Mutant Subsumption Graph\n";
-		printMSG(graph, out);
-		efficiencyMSG(graph, out);
-		printTMS(tmutants, out);
-		out.close();
-
 		// create TypedMutantSet
 		std::cout << "Begin to output MSG..." << std::endl;
 		TypedOutputter tout; tout.open(root);
-		tout.output_mutants(tmutants);
-		tout.output_distribution(tmutants);
-		tout.output_templates(tmutants);
+		tout.output_summary(tmutants);
+		tout.output_graph(tmutants.get_graph());
 		tout.output_classification(tmutants);
 		tout.close();
 	}
@@ -998,4 +651,3 @@ int main() {
 	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
 }
-*/

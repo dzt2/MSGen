@@ -2,7 +2,7 @@
 #include "ctrace.h"
 #include "cscript.h"
 
-
+/*
 int main() {
 // create projects
 	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "Day"; 
@@ -40,3 +40,4 @@ int main() {
 	std::cout << "\nPress any key to exit..." << std::endl;
 	getchar(); return 0;
 }
+*/
