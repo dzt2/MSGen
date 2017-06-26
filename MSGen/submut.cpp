@@ -574,7 +574,8 @@ static void constructMSG(MSGraph & graph, TestSet & tests) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "tcas"; TestType ttype = TestType::tcas;
+	std::string prname = "tot_info"; 
+	TestType ttype = TestType::tot_info;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
