@@ -5,16 +5,16 @@
 /*
 int main() {
 // create projects
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "Day"; 
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "triangle"; 
 	File & dir = *(new File(prefix + name)); CProgram & program = *(new CProgram(dir));
 	CTest & tproject = *(new CTest(TestType::general, dir, program.get_exec()));
 	CTrace & cproject = *(new CTrace(dir, program.get_source(), tproject.get_space()));
-
+	
 	// load tests from ../suites/
 	tproject.load();
 	const TestSpace & tspace = tproject.get_space();
 	std::cout << "Generate " << tspace.number_of_tests() << " tests.\n";
-
+	
 	// generate script file
 	CScript & script = *(new CScript(dir, program.get_exec(), tspace));
 	script.create_script("runall.sh");

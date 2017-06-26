@@ -605,7 +605,7 @@ static void load_test_coverage(MSGraph & graph, MutantSet & mutants, TestSet & t
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "triangle"; TestType ttype = TestType::general;
+	std::string prname = "minmax"; TestType ttype = TestType::general;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
