@@ -522,25 +522,6 @@ void TypedOutputter::output_graph(const MSGraph & graph) {
 }
 
 /* APIs for project models */
-/* load the tests and mutants into the project */
-static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
-	ctest.load(); const TestSpace & tspace = ctest.get_space();
-	std::cout << "Loading test cases: " << tspace.number_of_tests() << std::endl;
-
-	const CodeSpace & cspace = cmutant.get_code_space();
-	const std::set<CodeFile *> & cfiles = cspace.get_code_set();
-	auto cfile_beg = cfiles.begin(), cfile_end = cfiles.end();
-	while (cfile_beg != cfile_end) {
-		/* load file text */
-		CodeFile & cfile = *(*(cfile_beg++));
-		cfile.get_space().load(cfile);
-		/* load mutants and mutations */
-		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		cmutant.load_mutants_for(mspace, true);
-		std::cout << "Load " << mspace.number_of_mutants() <<
-			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
-	}
-}
 /* construct MSG for the specified mutants */
 static void constructMSG(MSGraph & graph, TestSet & tests) {
 	// get models 
@@ -571,6 +552,7 @@ static void constructMSG(MSGraph & graph, TestSet & tests) {
 }
 
 /* test main */
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
@@ -620,4 +602,4 @@ int main() {
 	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
 }
-
+*/
