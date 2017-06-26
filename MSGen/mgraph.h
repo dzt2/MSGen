@@ -15,10 +15,11 @@
 		[4] MSGBuilder
 */
 
-#include "mclass.h"
+#include "cscore.h"
 #include <queue>
 
 // class declarations 
+class MuClass;
 class MuCluster;
 class MuSubsume;
 class MuSubsumePort;
@@ -39,24 +40,25 @@ public:
 	MSGraph & get_graph() const { return graph; }
 	/* get the id of this graph */
 	MuCluster::ID get_id() const { return cluster_id; }
-	/* get the class where mutants of this cluster are maintained */
-	MuClass & get_class() const { return _class; }
+
+	/* get the mutant set of this cluster */
+	const MutantSet & get_mutants() const { return *mutants; }
+	/* whether there is mutant in the cluster */
+	bool has_mutant(Mutant::ID mid) const { return mutants->has_mutant(mid); }
+	/* get the number of mutants in this cluster */
+	size_t size() const { return mutants->number_of_mutants(); }
+
 	/* get the score vector of this cluster */
 	const BitSeq & get_score_vector() const { return score_vector; }
 	/* get the score degree of this cluster */
 	size_t get_score_degree() const { return score_degree; }
-
-	/* whether there is mutant in the cluster */
-	bool has_mutant(Mutant::ID mid) const { return _class.has_mutant(mid); }
-	/* get the number of mutants in this cluster */
-	size_t size() const { return _class.size(); }
 
 	/* get the port of edges to this cluster */
 	MuSubsumePort & get_in_port() const { return *in_port; }
 	/* get the port of edges from the cluster */
 	MuSubsumePort & get_ou_port() const { return *ou_port; }
 
-	/* create | delete | link_to */
+	/* create | delete | link_to | add-mutant */
 	friend class MSGraph;
 
 private:
@@ -66,7 +68,7 @@ private:
 	ID cluster_id;
 
 	/* class where mutant is stored */
-	MuClass & _class;
+	MutantSet * mutants;
 
 	/* score vector of the cluster */
 	const BitSeq score_vector;
@@ -80,10 +82,12 @@ private:
 
 protected:
 	/* create a cluster with specified cluster */
-	MuCluster(MSGraph &, ID, const BitSeq &, MuClass &);
+	MuCluster(MSGraph &, ID, const BitSeq &);
 	/* deconstructor */
 	~MuCluster();
 
+	/* add mutant to the cluster */
+	void add_mutant(Mutant::ID mid) { mutants->add_mutant(mid); }
 	/* link this node to another node */
 	void link_to(MuCluster &);
 };
@@ -181,11 +185,14 @@ private:
 class MSGraph {
 public:
 	/* create an empty graph */
-	MSGraph(const MutantSet & mutants) : clusters(), hierarchy(), roots(), leafs(), index() {
-		_class_set = new MuClassSet(mutants);
-	}
+	MSGraph(MutantSpace & space) : mspace(space), clusters(), hierarchy(), roots(), leafs(), index() { mutants = mspace.create_set(); }
 	/* deconstructor */
-	~MSGraph() { clear(); delete _class_set; }
+	~MSGraph() { clear(); mspace.delete_set(mutants); }
+
+	/* get the space where the graph is defined */
+	MutantSpace & get_space() const { return mspace; }
+	/* get the set of mutants in this graph */
+	const MutantSet & get_mutants() const { return *mutants; }
 
 	/* get the number of clusters in the grpah */
 	size_t size() const { return clusters.size(); }
@@ -208,33 +215,39 @@ public:
 	/* get the cluster of the graph */
 	MuCluster & get_cluster_of(Mutant::ID) const;
 
-	/* get the class-set where the graph is built */
-	MuClassSet & get_class_set() const { return *_class_set; }
-
 	/* clear | build */
 	friend class MSGBuilder;
 	/* connect | update-leafs | clear-edges */
 	friend class MSGLinker;
 
 private:
+	/* space where the graph is defined */
+	MutantSpace & mspace;
+	/* set of all mutants in the graph */
+	MutantSet * mutants;
+
 	/* set of nodes in the graph */
 	std::vector<MuCluster *> clusters;
 	/* hierarchy for mutant clusters */
 	MuHierarchy hierarchy;
+
 	/* set of roots in the graph */
 	std::set<MuCluster *> roots;
 	/* set of leafs in the graph */
 	std::set<MuCluster *> leafs;
+
 	/* map from mutant to their cluster */
 	std::map<Mutant::ID, MuCluster *> index;
 
-	/* base to build this graph */
-	MuClassSet * _class_set;
 protected:
 	/* clear all the nodes, edges and hierarchy */
 	void clear();
-	/* build unlinked MSG by classes */
-	void build(MuClassSet &);
+	/* create a new cluster for bit-string in this graph */
+	MuCluster * new_cluster(const BitSeq &);
+	/* add mutant to the specified cluster in graph */
+	void add_mutant(MuCluster &, Mutant::ID);
+	/* sort the hierarchy in the graph */
+	void sort() { hierarchy.sort(); }
 
 	/* clear all the edges in the graph */
 	void clear_edges();
@@ -244,61 +257,6 @@ protected:
 	void update_roots_and_leafs();
 };
 
-/* to build unlinked clusters in MSG */
-class MSGBuilder {
-public:
-	/* create a builder for MSG */
-	MSGBuilder() {}
-	/* deconstructor */
-	~MSGBuilder() { uninstall(); }
-
-	/* establish the class-set and graph to be built up */
-	void install(MSGraph & g) {
-		uninstall();
-		class_set = &(g.get_class_set());
-		graph = &g;
-	}
-	/* build up the unlinker clusters in MSG by score function */
-	void build_up(ScoreProducer & producer, ScoreConsumer & consumer) {
-		if (graph == nullptr || class_set == nullptr) {
-			CError error(CErrorType::Runtime, 
-				"MSGBuilder::build_up", "Invalid access: not-installed");
-			CErrorConsumer::consume(error); exit(CErrorType::Runtime);
-		}
-		else {
-			MuClassifierByScore classifier;
-			classifier.install(producer, consumer);
-			classifier.classify(*class_set);
-			classifier.uninstall();
-
-			graph->clear(); 
-			graph->build(*class_set);
-		}
-	}
-	/* build up the unlinked clusters for mutants in graph by coverage (not used for subsumption) */
-	void build_up(CoverageProducer & producer, CoverageConsumer & consumer) {
-		if (graph == nullptr || class_set == nullptr) {
-			CError error(CErrorType::Runtime,
-				"MSGBuilder::build_up", "Invalid access: not-installed");
-			CErrorConsumer::consume(error); exit(CErrorType::Runtime);
-		}
-		else {
-			MuClassifierByCoverage classifier;
-			classifier.install(producer, consumer);
-			classifier.classify(*class_set);
-			classifier.uninstall();
-
-			graph->clear();
-			graph->build(*class_set);
-		}
-	}
-	/* remove the status of builder */
-	void uninstall() { class_set = nullptr; graph = nullptr; }
-
-private:
-	MuClassSet * class_set;
-	MSGraph * graph;
-};
 /* visit space for sub-graph in MSG */
 class _MSG_VSpace {
 public:
@@ -427,6 +385,9 @@ public:
 	static const OrderOption top_down = 1;	/* order from roots to leafs */
 	static const OrderOption randomly = 2;	/* randomly transversal */
 
+	/* to create and connect */
+	friend class MSGBuilder;
+protected:
 	/* create a linker to connect MSG */
 	MSGLinker() : graph(nullptr), vspace(nullptr) {}
 	/* deconstructor */
@@ -440,7 +401,6 @@ public:
 	*/
 	void connect(MSGraph &, OrderOption);
 
-protected:
 	/* open the linker to another graph */
 	void open(MSGraph &, OrderOption);
 	/* compute the nodes directly subsumed by x in sub-graph */
@@ -470,6 +430,30 @@ private:
 	/* eliminate redundant mutants from DS */
 	void eliminate_DS(std::set<MuCluster *> &);
 };
+/* to build unlinked clusters in MSG */
+class MSGBuilder {
+public:
+	/* create a builder for MSG */
+	MSGBuilder() : graph(nullptr), trie(nullptr) {}
+	/* deconstructor */
+	~MSGBuilder() { close(); }
 
+	/* open another graph for building */
+	void open(MSGraph &);
+	/* add mutant and its score vector to the graph */
+	void add(Mutant::ID, const BitSeq &);
+	/* create the edges between nodes without specifying its order */
+	void link();
+	/* create the edges between nodes in MSG */
+	void link(MSGLinker::OrderOption);
+	/* close the builder and clear trie and linker */
+	void close();
 
-
+private:
+	/* graph to be built */
+	MSGraph * graph;
+	/* trie tree for clustering */
+	BitTrieTree * trie;
+	/* to connect nodes in graph */
+	MSGLinker linker;
+};

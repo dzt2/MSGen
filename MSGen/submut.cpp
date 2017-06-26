@@ -1,7 +1,7 @@
 #include "submut.h"
 
 TypedMutantSet::TypedMutantSet(MSGraph & g) : graph(g),
-	mutants(g.get_class_set().get_mutants()) {
+	mutants(g.get_mutants()) {
 	
 	MutantSpace & mspace = mutants.get_space();
 	stubborn_mutants = mspace.create_set();
@@ -98,7 +98,7 @@ TypedMutantSet::TypedMutantSet(MSGraph & g) : graph(g),
 
 }
 TypedMutantSet::~TypedMutantSet() {
-	MutantSpace & mspace = graph.get_class_set().get_mutants().get_space();
+	MutantSpace & mspace = graph.get_mutants().get_space();
 	mspace.delete_set(stubborn_mutants);
 	mspace.delete_set(subsuming_mutants);
 	mspace.delete_set(subsumed_mutants);
@@ -455,7 +455,7 @@ void TypedOutputter::output_summary(const TypedMutantSet & tmutants) {
 	MuCluster::ID cid = 0, num = graph.size();
 	while (cid < num) {
 		MuCluster & cluster = graph.get_cluster(cid++);
-		M += cluster.get_class().size();
+		M += cluster.get_mutants().number_of_mutants();
 		E += cluster.get_ou_port().get_degree();
 	}
 
@@ -542,70 +542,39 @@ static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 	}
 }
 /* construct MSG for the specified mutants */
-static void constructMSG(MSGraph & graph, MutantSet & mutants, TestSet & tests) {
+static void constructMSG(MSGraph & graph, TestSet & tests) {
 	// get models 
-	const CMutant & cmutant = mutants.get_space().get_project();
+	const CMutant & cmutant = graph.get_space().get_project();
 	const CTest & ctest = tests.get_space().get_project();
 	const File & root = cmutant.get_code_space().get_project().get_root();
-	const CodeFile & cfile = mutants.get_space().get_code_file();
+	const CodeFile & cfile = graph.get_space().get_code_file();
+	MutantSet * mutants = graph.get_space().create_set(); mutants->complement();
 
 	// get score function
 	CScore & cscore = *(new CScore(root, cmutant, ctest));
 	ScoreSource & score_src = cscore.get_source(cfile);
-	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	ScoreFunction & score_func = *(score_src.create_function(tests, *mutants));
 	ScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+	ScoreVector * score_vector;
 
 	// create unlinker MSG
 	MSGBuilder builder;
-	builder.install(graph);
-	builder.build_up(producer, consumer);
-	builder.uninstall();
+	builder.open(graph);
+	while ((score_vector = producer.produce()) != nullptr) {
+		builder.add(score_vector->get_mutant(), score_vector->get_vector());
+		consumer.consume(score_vector);
+	}
+	builder.link(MSGLinker::down_top); builder.close();
 
-	// link the nodes in MSG
-	MSGLinker linker;
-	linker.connect(graph, MSGLinker::down_top);
-}
-/* load the coverage of tested mutants */
-static void load_test_coverage(MSGraph & graph, MutantSet & mutants, TestSet & tests) {
-	/* getters */
-	const MutantSpace & mspace = mutants.get_space();
-	const TestSpace & tspace = tests.get_space();
-	const CodeFile & cfile = mspace.get_code_file();
-	
-	const CMutant & cmutant = mspace.get_project();
-	const CTest & ctest = tspace.get_project();
-	const CodeSpace & cspace = cmutant.get_code_space();
-	const File & root = cspace.get_project().get_root();
-
-	/* create coverage project */
-	CTrace ctrace(root, cspace, tspace);
-	CoverageSpace & covspace = ctrace.get_space();
-
-	/* load coverage */
-	covspace.add_file_coverage(cfile, tests);
-	ctrace.load_coverage(cfile);
-	std::cout << "Loading coverage for \"" << cfile.get_file().get_path() << "\"" << std::endl;
-
-	/* get coverage information */
-	FileCoverage & fcov = covspace.get_file_coverage(cfile);
-	CoverageProducer producer(mspace, fcov);
-	CoverageConsumer consumer;
-
-	/* classify mutants by their coverage */
-	MSGBuilder builder;
-	builder.install(graph);
-	builder.build_up(producer, consumer);
-	builder.uninstall();
-
-	/* return */ return;
+	// delete mutants
+	graph.get_space().delete_set(mutants);
 }
 
-/* test main method */
-
+/* test main */
 int main() {
 	// input-arguments
-	std::string prefix = "../../../MyData/SiemensSuite/"; 
-	std::string prname = "minmax"; TestType ttype = TestType::general;
+	std::string prefix = "../../../MyData/SiemensSuite/";
+	std::string prname = "tcas"; TestType ttype = TestType::tcas;
 
 	// create code-project, mutant-project, test-project
 	File & root = *(new File(prefix + prname));
@@ -615,7 +584,7 @@ int main() {
 
 	// load mutants and tests
 	load_tests_mutants(ctest, cmutant);
-	
+
 	// load MSG
 	const CodeSpace & cspace = cmutant.get_code_space();
 	const std::set<CodeFile *> & cfiles = cspace.get_code_set();
@@ -624,19 +593,18 @@ int main() {
 		// get set of mutants and tests in project
 		const CodeFile & cfile = *(*(beg++));
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		MutantSet & mutants = *(mspace.create_set());
 		TestSet & tests = *(ctest.malloc_test_set());
-		mutants.complement(); tests.complement();
+		tests.complement();
 
 		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
 
 		// create MSG
-		MSGraph graph(mutants);
-		constructMSG(graph, mutants, tests);
-		TypedMutantSet tmutants(graph);
+		MSGraph graph(mspace);
+		constructMSG(graph, tests);
 
 		// create TypedMutantSet
 		std::cout << "Begin to output MSG..." << std::endl;
+		TypedMutantSet tmutants(graph);
 		TypedOutputter tout; tout.open(root);
 		tout.output_summary(tmutants);
 		tout.output_graph(tmutants.get_graph());
@@ -645,9 +613,10 @@ int main() {
 	}
 
 	// delete memory
-	delete &cmutant; delete &ctest; 
+	delete &cmutant; delete &ctest;
 	delete &program; delete &root;
 
 	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
 }
+

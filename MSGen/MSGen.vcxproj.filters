@@ -63,9 +63,6 @@
     <ClInclude Include="cscript.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
-    <ClInclude Include="mclass.h">
-      <Filter>Header Files\graph</Filter>
-    </ClInclude>
     <ClInclude Include="mgraph.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
@@ -103,9 +100,6 @@
     </ClCompile>
     <ClCompile Include="gentest.cpp">
       <Filter>Source Files\driver</Filter>
-    </ClCompile>
-    <ClCompile Include="mclass.cpp">
-      <Filter>Source Files\graph</Filter>
     </ClCompile>
     <ClCompile Include="mgraph.cpp">
       <Filter>Source Files\graph</Filter>

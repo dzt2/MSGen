@@ -3,18 +3,18 @@
 
 unsigned int times;
 
-MuCluster::MuCluster(MSGraph & g, ID id, const BitSeq & vec, MuClass & _cls)
-	: graph(g), cluster_id(id), _class(_cls), score_vector(vec) {
-	BitSeq::size_t k = 0, n = score_vector.bit_number();
-
-	score_degree = 0;
-	while (k < n) {
-		if (score_vector.get_bit(k++) == BIT_1)
-			score_degree++;
-	}
-
+MuCluster::MuCluster(MSGraph & g, MuCluster::ID id, const BitSeq & bits)
+	: graph(g), cluster_id(id), score_vector(bits), score_degree(0) {
+	MutantSpace & mspace = graph.get_space();
+	mutants = mspace.create_set();
 	in_port = new MuSubsumePort();
 	ou_port = new MuSubsumePort();
+
+	BitSeq::size_t i = 0, n = bits.bit_number();
+	while (i < n) {
+		if (score_vector.get_bit(i++) == BIT_1)
+			score_degree++;
+	}
 }
 MuCluster::~MuCluster() {
 	delete in_port;
@@ -112,6 +112,7 @@ void MSGraph::clear() {
 	leafs.clear();
 	hierarchy.clear();
 	index.clear();
+	mutants->clear();
 
 	for (size_t i = 0; i < clusters.size(); i++)
 		delete clusters[i];
@@ -125,42 +126,24 @@ void MSGraph::clear_edges() {
 		cluster.get_ou_port().clear();
 	}
 }
-void MSGraph::build(MuClassSet & class_set) {
-	/* initialization */ 
-	clear(); _class_set = &class_set;
-
-	/* create clusters for each class in the set */
-	const std::map<MuFeature, MuClass *> &
-		classes = class_set.get_classes();
-	auto cbeg = classes.begin(), cend = classes.end();
-	while (cbeg != cend) {
-		/* get next class and create its cluster in the list */
-		MuClass & _class = *((cbeg++)->second);
-		BitSeq * score_vec = (BitSeq *)(_class.get_feature());
-		MuCluster * cluster = new MuCluster(*this, clusters.size(), *score_vec, _class);
-		clusters.push_back(cluster); hierarchy.add(*cluster);
+MuCluster * MSGraph::new_cluster(const BitSeq & bits) {
+	MuCluster * cluster = new MuCluster(*this, clusters.size(), bits);
+	clusters.push_back(cluster); hierarchy.add(*cluster);
+	return cluster;
+}
+void MSGraph::add_mutant(MuCluster & cluster, Mutant::ID mid) {
+	if (index.count(mid) > 0) {
+		CError error(CErrorType::InvalidArguments, 
+			"MSGraph::add_mutant", 
+			"Invalid mutant-id (" + std::to_string(mid) + ")");
+		CErrorConsumer::consume(error); 
+		exit(CErrorType::InvalidArguments);
 	}
-
-	/* update index for graph */
-	Mutant::ID mid, mnum = class_set.get_mutants().get_space().number_of_mutants();
-	for (mid = 0; mid < mnum; mid++) {
-		size_t k = 0, n = clusters.size();
-		while (k < n) {
-			if (clusters[k]->has_mutant(mid)) {
-				if (index.count(mid) == 0) {
-					index[mid] = clusters[k];
-				}
-				else {
-					CError error(CErrorType::Runtime, "MSGraph::add", 
-						"Duplicated mutants in two classes (" + std::to_string(mid) + ")");
-					CErrorConsumer::consume(error); exit(CErrorType::Runtime);
-				}
-			}
-			k++;
-		}
-	} /* end for */
-
-	/* sort hierarchy */ hierarchy.sort();
+	else {
+		mutants->add_mutant(mid);
+		cluster.add_mutant(mid);
+		index[mid] = &cluster;
+	}
 }
 void MSGraph::update_roots_and_leafs() {
 	/* initialization */
@@ -638,4 +621,43 @@ void MSGLinker::eliminate_DS(std::set<MuCluster *> & DS) {
 	}
 
 	/* end */ return;
+}
+
+void MSGBuilder::open(MSGraph & g) {
+	close(); graph = &g; g.clear();
+	trie = new BitTrieTree();
+}
+void MSGBuilder::add(Mutant::ID mid, const BitSeq & bits) {
+	if (graph == nullptr || trie == nullptr) {
+		CError error(CErrorType::Runtime, "MSGBuilder::add", "Invalid access: not-opened");
+		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+	}
+	else {
+		/* find the leaf where the cluster is referred by bit-string */
+		BitTrie * leaf = trie->insert_vector(bits);
+
+		/* the first time to create cluster and insert it to the trie */
+		if (leaf->get_data() == nullptr) {
+			MuCluster * cluster = graph->new_cluster(bits);
+			graph->add_mutant(*cluster, mid); 
+			leaf->set_data(cluster);
+		}
+		/* only to insert the mutant into the cluster */
+		else {
+			MuCluster * cluster = (MuCluster *)(leaf->get_data());
+			graph->add_mutant(*cluster, mid);
+		}
+	}
+}
+void MSGBuilder::link() {
+	graph->sort(); linker.connect(*graph);
+}
+void MSGBuilder::link(MSGLinker::OrderOption option) {
+	graph->sort(); linker.connect(*graph, option);
+}
+void MSGBuilder::close() {
+	if (graph != nullptr) {
+		graph = nullptr;
+		delete trie;
+	}
 }

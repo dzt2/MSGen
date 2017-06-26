@@ -120,7 +120,6 @@
     <ClInclude Include="ctest.h" />
     <ClInclude Include="ctext.h" />
     <ClInclude Include="ctrace.h" />
-    <ClInclude Include="mclass.h" />
     <ClInclude Include="mgraph.h" />
     <ClInclude Include="submut.h" />
   </ItemGroup>
@@ -136,7 +135,6 @@
     <ClCompile Include="ctext.cpp" />
     <ClCompile Include="ctrace.cpp" />
     <ClCompile Include="gentest.cpp" />
-    <ClCompile Include="mclass.cpp" />
     <ClCompile Include="mgraph.cpp" />
     <ClCompile Include="submut.cpp" />
   </ItemGroup>
