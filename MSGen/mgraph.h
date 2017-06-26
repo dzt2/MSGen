@@ -19,13 +19,16 @@
 #include <queue>
 
 // class declarations 
-class MuClass;
 class MuCluster;
 class MuSubsume;
 class MuSubsumePort;
 class MuHierarchy;
 class MSGraph;
+
+// class for building MSG
+class _MSG_VSpace;
 class MSGLinker;
+class MSGBuilder;
 
 /* to count the number of comparions between mutants */
 extern unsigned int times;

@@ -69,6 +69,9 @@
     <ClInclude Include="submut.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
+    <ClInclude Include="smerge.h">
+      <Filter>Header Files\graph</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp">
@@ -109,6 +112,9 @@
     </ClCompile>
     <ClCompile Include="autotest.cpp">
       <Filter>Source Files\driver</Filter>
+    </ClCompile>
+    <ClCompile Include="smerge.cpp">
+      <Filter>Source Files\graph</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
