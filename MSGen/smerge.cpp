@@ -603,8 +603,8 @@ static void compute_subsumings(const CodeFile & cfile, MutantSet & mutants, Test
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "tcas";
-	TestType ttype = TestType::tcas;
+	std::string prname = "minmax";
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
