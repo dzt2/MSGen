@@ -113,6 +113,25 @@ private:
 	SuMutantSet * answer;
 };
 
+const static char TRAP_STATEMENT[]	= "trap-stmt";
+const static char TRAP_CONDITION[]	= "trap-cond";
+const static char TRAP_VALUE[]		= "trap-value";
+const static char INCDEC_VALUE[]	= "incdec-value";
+const static char INCDEC_REFER[]	= "incdec-refer";
+const static char NEG_BOOLEAN[]		= "neg-bool";
+const static char NEG_BINARYS[]		= "neg-bits";
+const static char NEG_NUMBERS[]		= "neg-number";
+const static char DEL_STATEMENT[]	= "del-stmt";
+const static char REP_STATEMENT[]	= "rep-stmt";
+const static char VAR_TO_VAR[]		= "x_x";
+const static char VAR_TO_CONST[]	= "x_c";
+const static char CONST_TO_CONST[]	= "c_c";
+const static char OAXX[] = "OAXX";
+const static char OEXX[] = "OEXX";
+const static char OBXX[] = "OBXX";
+const static char ORXX[] = "ORXX";
+const static char OLXX[] = "OLXX";
+
 /* core data space for experiments of subsuming mutants */
 class SuMutantExperimentCore {
 public:
@@ -134,6 +153,7 @@ public:
 
 	/* get_mutants | clear_mutants */
 	friend class SuMutantExperimentDriver;
+
 protected:
 	/* get the subsuming mutants for specified key 
 		1) if not defined, create a new object;
@@ -160,7 +180,11 @@ public:
 	~SuMutantExperimentDriver() { finish(); }
 
 	/* start up the platform of experiment */
-	void start(SuMutantExperimentCore & c) { finish(); core = &c; }
+	void start(SuMutantExperimentCore & c) { 
+		finish(); 
+		core = &c; 
+		c.clear_mutants(); 
+	}
 	/* derive the subsuming mutants by their operator, directly */
 	void derive_operator_I(ScoreProducer &, ScoreConsumer &);
 	/* derive the subsuming mutants by grouped operators (designed) */
@@ -173,6 +197,22 @@ public:
 private:
 	/* core data for experiment platform */
 	SuMutantExperimentCore * core;
+
+	/* cache for type-II */
+	std::set<std::string> type_II_cache;
+
+protected:
+	/*
+		Type-II can be:
+			1) trap-stmt; trap-condition; trap-value;
+			2) incdec-value; incdec-reference;
+			3) neg-bool; neg-bits; neg-number;
+			4) del-stmt; rep-stmt;
+			5) OAXX; OBXX; OSXX; OEXX; OLXX; ORXX;
+			6) x-x; x-c; c-c;
+			7) "" for invalid operator
+	*/
+	void type_II(const std::string &, std::string &);
 };
 /* outputter for experiment result */
 class SuMutantExperimentOutput {

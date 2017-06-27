@@ -50,7 +50,8 @@ void SuMutantMerger::open(SuMutantSet & result) {
 void SuMutantMerger::append(SuMutantSet & smuts) {
 	/* get the subsuming mutants and its graph */
 	const MutantSet & mutants = smuts.get_subsuming_mutants();
-	Mutant::ID mid = 0, num = mutants.number_of_mutants();
+	MutantSpace & mspace = mutants.get_space();
+	Mutant::ID mid = 0, num = mspace.number_of_mutants();
 	
 	MSGraph & graph = smuts.get_graph();
 	while (mid < num) {
@@ -163,11 +164,75 @@ void SuMutantExperimentDriver::derive_operator_I(
 	builders.clear();
 }
 void SuMutantExperimentDriver::derive_operator_II() {
-	CError error(CErrorType::Runtime, 
-		"SuMutantExperimentDriver::derive_operator_II", 
-		"Invalid access: operators have not been designed");
-	CErrorConsumer::consume(error);
-	exit(CErrorType::Runtime);
+	/* declarations */
+	std::string type2;
+	std::map<std::string, SuMutantMerger *> mergers;
+	std::map<std::string, std::list<SuMutantSet *> *> append_lists;
+	
+	const std::set<std::string> & keys = core->get_keys();
+	auto kbeg = keys.begin(), kend = keys.end();
+	while (kbeg != kend) {
+		/* get the next operator and its subsuming set */
+		const std::string & oprt = *(kbeg++);
+		this->type_II(oprt, type2);
+		if (type2.empty()) continue;
+
+		/* get the the append list and merger */
+		SuMutantMerger * merger;
+		std::list<SuMutantSet *> * alist;
+		if (mergers.count(type2) == 0) {
+			merger = new SuMutantMerger();
+			mergers[type2] = merger;
+			alist = new std::list<SuMutantSet *>();
+			append_lists[type2] = alist;
+		}
+		else {
+			auto iter = mergers.find(type2);
+			merger = iter->second;
+			auto iter2 = append_lists.find(type2);
+			alist = iter2->second;
+		}
+
+		/* add the subsuming set of operator to this */
+		SuMutantSet & smut = core->get_mutants(oprt);
+		alist->push_back(&smut);
+	}
+
+	/* initialize type-II-cache for constructing */
+	type_II_cache.clear();
+	auto mbeg = mergers.begin();
+	auto mend = mergers.end();
+
+	while (mbeg != mend) {
+		/* get the next merger and its append-list */
+		const std::string & type2 = mbeg->first;
+		SuMutantMerger * merger = mbeg->second;
+		auto iter = append_lists.find(type2);
+		std::list<SuMutantSet *> * alist = iter->second;
+
+		/* create subsuming set for the type-2 */
+		SuMutantSet & smut = core->get_mutants(type2);
+		
+		/* add child-subsuming-mutants to this one */
+		auto beg = alist->begin();
+		auto end = alist->end();
+		merger->open(smut);
+		while (beg != end) {
+			SuMutantSet * smut2 = *(beg++);
+			merger->append(*smut2);
+		}
+		merger->extract(); merger->close();
+
+		/* insert the type-2 to cache */
+		type_II_cache.insert(type2);
+
+		/* delete merger resource */
+		delete merger; alist->clear(); delete alist;
+
+		mbeg++;	/* to the next group */
+	}
+
+	/* return */ return;
 }
 void SuMutantExperimentDriver::derive_global_III() {
 	CError error(CErrorType::Runtime,
@@ -175,6 +240,74 @@ void SuMutantExperimentDriver::derive_global_III() {
 		"Invalid access: operators have not been designed");
 	CErrorConsumer::consume(error);
 	exit(CErrorType::Runtime);
+}
+void SuMutantExperimentDriver::type_II(const std::string & oprt, std::string & type2) {
+	/* initial */ type2 = "";
+
+	/* trap-error */
+	if (oprt == "u-STRP" || oprt == "I-CovAllNod")
+		type2 = TRAP_STATEMENT;
+	else if (oprt == "u-STRI" || oprt == "I-CovAllEdg")
+		type2 = TRAP_CONDITION;
+	else if (oprt == "u-VDTR")
+		type2 = TRAP_VALUE;
+	/* inc-dec-error */
+	else if (oprt == "u-VTWD" || oprt == "II-ArgIncDec")
+		type2 = INCDEC_VALUE;
+	else if (oprt == "u-Oido" || oprt == "I-DirVarIncDec" || oprt == "I-IndVarIncDec")
+		type2 = INCDEC_REFER;
+	/* negate-error */
+	else if (oprt == "I-DirVarLogNeg" || oprt == "II-ArgLogNeg" || oprt == "I-IndVarLogNeg" || oprt == "u-OCNG" || oprt == "u-OLNG")
+		type2 = NEG_BOOLEAN;
+	else if (oprt == "I-DirVarBitNeg" || oprt == "II-ArgBitNeg" || oprt == "I-IndVarBitNeg" || oprt == "u-OBNG")
+		type2 = NEG_BINARYS;
+	else if (oprt == "I-DirVarAriNeg" || oprt == "II-ArgAriNeg" || oprt == "I-IndVarAriNeg" || oprt == "u-OANG")
+		type2 = NEG_NUMBERS;
+	/* statement-error */
+	else if (oprt == "u-SSDL" || oprt == "I-RetStaDel")
+		type2 = DEL_STATEMENT;
+	else if (oprt == "u-SRSR" || oprt == "u-SWDD" || oprt == "u-SCRB" || oprt == "I-RetStaRep")
+		type2 = REP_STATEMENT;
+	/* operand-error */
+	else if (oprt == "u-Ccsr" || oprt == "u-CRCR")
+		type2 = VAR_TO_CONST;
+	else if (oprt == "u-Cccr")
+		type2 = CONST_TO_CONST;
+	else if (oprt == "u-VGSR" || oprt == "u-VLPR" || oprt == "u-VLSR" || oprt == "II-ArgStcAli")
+		type2 = VAR_TO_VAR;
+	/* operator-error */
+	else if (oprt == "u-OAAN" || oprt == "u-OAAA" || oprt == "u-OABN" || oprt == "u-OABA"
+		|| oprt == "u-OAEA" || oprt == "u-OALA" || oprt == "u-OALN" || oprt == "u-OASN"
+		|| oprt == "u-OASA" || oprt == "u-OARN")
+		type2 = OAXX;
+	else if (oprt == "u-OBAN" || oprt == "u-OBAA" || oprt == "u-OBBN" || oprt == "u-OBBA"
+		|| oprt == "u-OBEA" || oprt == "u-OBLA" || oprt == "u-OBLN" || oprt == "u-OBSN"
+		|| oprt == "u-OBSA" || oprt == "u-OBRN")
+		type2 = OBXX;
+	else if (oprt == "u-OEAA" || oprt == "u-OEBA" || oprt == "u-OESA" || oprt == "u-OELA")
+		type2 = OEXX;
+	else if (oprt == "u-OLAN" || oprt == "u-OLAA" || oprt == "u-OLBA" || oprt == "u-OLBN"
+		|| oprt == "u-OLLA" || oprt == "u-OLLN" || oprt == "u-OLRN" || oprt == "u-OLSA" || oprt == "u-OLSN")
+		type2 = OLXX;
+	else if (oprt == "u-ORAN" || oprt == "u-ORBN" || oprt == "u-ORRN" || oprt == "u-ORSN" || oprt == "u-ORLN")
+		type2 = ORXX;
+	/* ignored operator */
+	else if (oprt == "I-DirVarRepCon" || oprt == "I-DirVarRepReq" || oprt == "II-ArgRepReq"
+		|| oprt == "II-FunCalDel" || oprt == "I-IndVarRepCon" || oprt == "I-IndVarRepReq"
+		|| oprt == "I-DirVarRepExt" || oprt == "I-DirVarRepClo" || oprt == "I-DirVarRepLoc"
+		|| oprt == "I-DirVarRepPar" || oprt == "I-IndVarRepExt" || oprt == "I-IndVarRepGlo"
+		|| oprt == "I-IndVarRepLoc" || oprt == "I-IndVarRepPar" || oprt == "u-SMTC"
+		|| oprt == "u-SMTT" || oprt == "u-SMVB" || oprt == "u-SSWM" || oprt == "u-OCOR"
+		|| oprt == "II-ArgDel")
+		type2 = "";
+	/* unknown list */
+	else {
+		CError error(CErrorType::InvalidArguments, 
+			"SuMutantExperimentDriver::type_II", 
+			"Unknown operator: \"" + oprt + "\"");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::InvalidArguments);
+	}
 }
 
 void SuMutantExperimentOutput::write(const SuMutantExperimentCore & core) {
@@ -290,7 +423,6 @@ void SuMutantExperimentOutput::trim(std::string & str) {
 	str = buffer;
 }
 
-
 /* load the tests and mutants into the project */
 static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 	ctest.load(); const TestSpace & tspace = ctest.get_space();
@@ -315,8 +447,8 @@ static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "schedule";
-	TestType ttype = TestType::schedule;
+	std::string prname = "mid";
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -368,6 +500,7 @@ int main() {
 		// execute the experiment 
 		driver.start(core);
 		driver.derive_operator_I(producer, consumer);
+		driver.derive_operator_II();
 		driver.finish();
 
 		// print the experiment result.

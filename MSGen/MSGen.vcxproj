@@ -122,7 +122,6 @@
     <ClInclude Include="ctrace.h" />
     <ClInclude Include="smerge.h" />
     <ClInclude Include="mgraph.h" />
-    <ClInclude Include="submut.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="autotest.cpp" />
@@ -138,7 +137,6 @@
     <ClCompile Include="gentest.cpp" />
     <ClCompile Include="mgraph.cpp" />
     <ClCompile Include="smerge.cpp" />
-    <ClCompile Include="submut.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
