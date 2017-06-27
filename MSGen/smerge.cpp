@@ -64,7 +64,9 @@ void SuMutantMerger::append(SuMutantSet & smuts) {
 	}
 }
 void SuMutantMerger::extract() {
-	builder.link(); answer->update_mutants();
+	builder.link(); 
+	builder.close();
+	answer->update_mutants();
 }
 
 SuMutantSet & SuMutantExperimentCore::get_global_mutants() {
@@ -214,7 +216,6 @@ void SuMutantExperimentDriver::derive_operator_II() {
 	/* declarations */
 	std::string type2;
 	std::map<std::string, SuMutantMerger *> mergers;
-	std::map<std::string, std::list<SuMutantSet *> *> append_lists;
 	
 	const std::map<std::string, SuMutantSet *> 
 		& mutants_I = core->get_mutants_I();
@@ -227,25 +228,22 @@ void SuMutantExperimentDriver::derive_operator_II() {
 		/* get the operator name for level-II */
 		type_II(oprt, type2);
 		if (type2.empty()) continue;
+		SuMutantSet & smut2 = core->get_mutants_II(type2);
 
 		/* get the the append list and merger */
 		SuMutantMerger * merger;
-		std::list<SuMutantSet *> * alist;
 		if (mergers.count(type2) == 0) {
 			merger = new SuMutantMerger();
 			mergers[type2] = merger;
-			alist = new std::list<SuMutantSet *>();
-			append_lists[type2] = alist;
+			merger->open(smut2);
 		}
 		else {
 			auto iter = mergers.find(type2);
 			merger = iter->second;
-			auto iter2 = append_lists.find(type2);
-			alist = iter2->second;
 		}
 
 		/* add the subsuming set of operator to this */
-		alist->push_back(smut);
+		merger->append(*smut);
 	}
 
 	/* initialize type-II-cache for constructing */
@@ -255,26 +253,12 @@ void SuMutantExperimentDriver::derive_operator_II() {
 		/* get the next merger and its append-list */
 		const std::string & type2 = mbeg->first;
 		SuMutantMerger * merger = mbeg->second;
-		auto iter = append_lists.find(type2);
-		std::list<SuMutantSet *> * alist = iter->second;
 
 		/* create subsuming set for the type-2 */
-		SuMutantSet & smut = core->get_mutants_II(type2);
-		
-		/* add child-subsuming-mutants to this one */
-		auto beg = alist->begin();
-		auto end = alist->end();
-		merger->open(smut);
-		while (beg != end) {
-			SuMutantSet * smut2 = *(beg++);
-			merger->append(*smut2);
-		}
 		merger->extract(); merger->close();
 
 		/* delete merger resource */
-		delete merger; alist->clear(); delete alist;
-
-		mbeg++;	/* to the next group */
+		delete merger; mbeg++;	
 	}
 
 	/* return */ return;
@@ -474,17 +458,6 @@ void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & co
 		/* get the next mutant in the space */
 		Mutant & mutant = mspace.get_mutant(k++);
 		mid = mutant.get_id();
-		const Mutation & mutation = 
-			mutant.get_mutation(mutant.get_orders() - 1);
-		const CodeLocation & loc = mutation.get_location();
-		origin = loc.get_text_at();
-		replace = mutation.get_replacement();
-		trim(origin); trim(replace);
-
-		/* base head for mutant */
-		out << mutant.get_id() << "\t";
-		out << text.lineOfIndex(loc.get_bias()) << "\t";
-		out << origin << "\t" << replace << "\t";
 
 		/* it's one of the mutant in some type-I cluster */
 		type1 = mutant.get_operator();
@@ -494,11 +467,6 @@ void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & co
 			SuMutantSet & smut1 = *(iter1->second);
 
 			if (smut1.has_mutant(mid)) {
-				/* print information of category in level-I */
-				out << type1 << "\t";
-				out << smut1.get_cluster_of(mid).get_id() << "\t";
-				out << get_category(smut1, mid) << "\t";
-
 				/* to parent level */
 				SuMutantExperimentDriver::type_II(type1, type2);
 				if (!type2.empty() && mut_II.count(type2)) {
@@ -507,6 +475,24 @@ void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & co
 					SuMutantSet & smut2 = *(iter2->second);
 
 					if (smut2.has_mutant(mid)) {
+						/* get its content */
+						const Mutation & mutation =
+							mutant.get_mutation(mutant.get_orders() - 1);
+						const CodeLocation & loc = mutation.get_location();
+						origin = loc.get_text_at();
+						replace = mutation.get_replacement();
+						trim(origin); trim(replace);
+
+						/* base head for mutant */
+						out << mutant.get_id() << "\t";
+						out << text.lineOfIndex(loc.get_bias()) << "\t";
+						out << origin << "\t" << replace << "\t";
+
+						/* print information of category in level-I */
+						out << type1 << "\t";
+						out << smut1.get_cluster_of(mid).get_id() << "\t";
+						out << get_category(smut1, mid) << "\t";
+
 						/* print information of category in level-II */
 						out << type2 << "\t";
 						out << smut2.get_cluster_of(mid).get_id() << "\t";
@@ -532,13 +518,12 @@ void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & co
 								}	/* end if: global */
 							}
 						}
+
+						/* to the next line */ out << "\n";
 					}
 				}
 			}
-		} /* end if: type1 */
-
-		/* to the next line */ 
-		out << "\n"; 
+		}
 	} /* end while */
 
 	/* #EOF */ out << std::endl; 
@@ -569,7 +554,6 @@ std::string SuMutantExperimentOutput::get_category(const SuMutantSet & smut, Mut
 		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
 	}
 }
-
 
 /* load the tests and mutants into the project */
 static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
@@ -619,7 +603,7 @@ static void compute_subsumings(const CodeFile & cfile, MutantSet & mutants, Test
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "bubble";
+	std::string prname = "Day";
 	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
@@ -683,8 +667,9 @@ int main() {
 		output.close();
 
 		// test 
-		compute_subsumings(cfile, mutants, tests, cscore);
-
+		//compute_subsumings(cfile, mutants, tests, cscore);
+		std::cerr << "Subsuming Mutants: " << core.get_mutants_IV().get_subsuming_mutants().number_of_mutants()
+			<< "{" << core.get_mutants_IV().get_subsuming_clusters().size() << "}\n";
 		std::cout << "Experiment finished: \"" << cfile.get_file().get_path() << "\"\n";
 	}
 
