@@ -67,42 +67,89 @@ void SuMutantMerger::extract() {
 	builder.link(); answer->update_mutants();
 }
 
-const SuMutantSet & SuMutantExperimentCore::get_subsuming_mutants(const std::string & key) const {
-	if (mut_map.count(key) == 0) {
-		CError error(CErrorType::InvalidArguments, 
-			"SuMutantExperimentCore::get_subsuming_mutants", 
-			"Invalid key: \"" + key + "\"");
-		CErrorConsumer::consume(error);
-		exit(CErrorType::InvalidArguments);
-	}
-	else {
-		auto iter = mut_map.find(key);
-		SuMutantSet * smut = iter->second;
-		return *smut;
-	}
-}
-SuMutantSet & SuMutantExperimentCore::get_mutants(const std::string & key) {
-	if (mut_map.count(key) == 0) {
+SuMutantSet & SuMutantExperimentCore::get_global_mutants() {
+	if (global_mut == nullptr) {
 		MSGraph * graph = new MSGraph(mspace);
-		SuMutantSet * smut = new SuMutantSet(*graph);
-		mut_map[key] = smut; keys.insert(key);
-		return *smut;
+		global_mut = new SuMutantSet(GLOBAL, *graph);
+	}
+	return *global_mut;
+}
+SuMutantSet & SuMutantExperimentCore::get_mutants_I(const std::string & oprt) {
+	SuMutantSet * smut;
+	if (mut_I.count(oprt) == 0) {
+		MSGraph * graph = new MSGraph(mspace);
+		smut = new SuMutantSet(oprt, *graph);
+		mut_I[oprt] = smut;
 	}
 	else {
-		auto iter = mut_map.find(key);
-		SuMutantSet * smut = iter->second;
-		return *smut;
+		auto iter = mut_I.find(oprt);
+		smut = iter->second;
 	}
+	return *smut;
+}
+SuMutantSet & SuMutantExperimentCore::get_mutants_II(const std::string & oprt) {
+	SuMutantSet * smut;
+	if (mut_II.count(oprt) == 0) {
+		MSGraph * graph = new MSGraph(mspace);
+		smut = new SuMutantSet(oprt, *graph);
+		mut_II[oprt] = smut;
+	}
+	else {
+		auto iter = mut_II.find(oprt);
+		smut = iter->second;
+	}
+	return *smut;
+}
+SuMutantSet & SuMutantExperimentCore::get_mutants_III(const std::string & oprt) {
+	SuMutantSet * smut;
+	if (mut_III.count(oprt) == 0) {
+		MSGraph * graph = new MSGraph(mspace);
+		smut = new SuMutantSet(oprt, *graph);
+		mut_III[oprt] = smut;
+	}
+	else {
+		auto iter = mut_III.find(oprt);
+		smut = iter->second;
+	}
+	return *smut;
 }
 void SuMutantExperimentCore::clear_mutants() {
-	auto beg = mut_map.begin();
-	auto end = mut_map.end();
+	/* clear the subsuming mutants in level-I */
+	auto beg = mut_I.begin(), end = mut_I.end();
 	while (beg != end) {
 		SuMutantSet * smut = (beg++)->second;
 		MSGraph & graph = smut->get_graph();
-		delete smut; delete &graph;
+		delete smut;
+		delete &graph;
 	}
-	mut_map.clear(); keys.clear();
+
+	/* clear the subsuming mutants in level-II */
+	beg = mut_II.begin(), end = mut_II.end();
+	while (beg != end) {
+		SuMutantSet * smut = (beg++)->second;
+		MSGraph & graph = smut->get_graph();
+		delete smut;
+		delete &graph;
+	}
+
+	/* clear the subsuming mutants in level-III */
+	beg = mut_III.begin(), end = mut_III.end();
+	while (beg != end) {
+		SuMutantSet * smut = (beg++)->second;
+		MSGraph & graph = smut->get_graph();
+		delete smut;
+		delete &graph;
+	}
+
+	/* clear global subsuming mutant set */
+	if (global_mut != nullptr) {
+		MSGraph & graph = global_mut->get_graph();
+		delete global_mut;
+		delete &graph;
+		global_mut = nullptr;
+	}
+	
+	/* return */ return;
 }
 
 void SuMutantExperimentDriver::derive_operator_I(
@@ -121,7 +168,7 @@ void SuMutantExperimentDriver::derive_operator_I(
 		const std::string & oprt = mutant.get_operator();
 
 		/* get the subsuming set for the operator */
-		SuMutantSet & smut = core->get_mutants(oprt);
+		SuMutantSet & smut = core->get_mutants_I(oprt);
 		MSGraph & graph = smut.get_graph();
 
 		/* get the builder */
@@ -149,7 +196,7 @@ void SuMutantExperimentDriver::derive_operator_I(
 		/* get the next operator and its subsuming mutants */
 		const std::string & oprt = beg->first;
 		MSGBuilder * builder = beg->second;
-		SuMutantSet & smut = core->get_mutants(oprt);
+		SuMutantSet & smut = core->get_mutants_I(oprt);
 
 		/* link the graph and delete builder */
 		builder->link(); 
@@ -169,12 +216,16 @@ void SuMutantExperimentDriver::derive_operator_II() {
 	std::map<std::string, SuMutantMerger *> mergers;
 	std::map<std::string, std::list<SuMutantSet *> *> append_lists;
 	
-	const std::set<std::string> & keys = core->get_keys();
-	auto kbeg = keys.begin(), kend = keys.end();
-	while (kbeg != kend) {
+	const std::map<std::string, SuMutantSet *> 
+		& mutants_I = core->get_mutants_I();
+	auto beg1 = mutants_I.begin(), end1 = mutants_I.end();
+	while (beg1 != end1) {
 		/* get the next operator and its subsuming set */
-		const std::string & oprt = *(kbeg++);
-		this->type_II(oprt, type2);
+		const std::string & oprt = beg1->first;
+		SuMutantSet * smut = beg1->second; beg1++;
+
+		/* get the operator name for level-II */
+		type_II(oprt, type2);
 		if (type2.empty()) continue;
 
 		/* get the the append list and merger */
@@ -194,15 +245,12 @@ void SuMutantExperimentDriver::derive_operator_II() {
 		}
 
 		/* add the subsuming set of operator to this */
-		SuMutantSet & smut = core->get_mutants(oprt);
-		alist->push_back(&smut);
+		alist->push_back(smut);
 	}
 
 	/* initialize type-II-cache for constructing */
-	type_II_cache.clear();
 	auto mbeg = mergers.begin();
 	auto mend = mergers.end();
-
 	while (mbeg != mend) {
 		/* get the next merger and its append-list */
 		const std::string & type2 = mbeg->first;
@@ -211,7 +259,7 @@ void SuMutantExperimentDriver::derive_operator_II() {
 		std::list<SuMutantSet *> * alist = iter->second;
 
 		/* create subsuming set for the type-2 */
-		SuMutantSet & smut = core->get_mutants(type2);
+		SuMutantSet & smut = core->get_mutants_II(type2);
 		
 		/* add child-subsuming-mutants to this one */
 		auto beg = alist->begin();
@@ -223,9 +271,6 @@ void SuMutantExperimentDriver::derive_operator_II() {
 		}
 		merger->extract(); merger->close();
 
-		/* insert the type-2 to cache */
-		type_II_cache.insert(type2);
-
 		/* delete merger resource */
 		delete merger; alist->clear(); delete alist;
 
@@ -234,12 +279,73 @@ void SuMutantExperimentDriver::derive_operator_II() {
 
 	/* return */ return;
 }
-void SuMutantExperimentDriver::derive_global_III() {
-	CError error(CErrorType::Runtime,
-		"SuMutantExperimentDriver::derive_global_III",
-		"Invalid access: operators have not been designed");
-	CErrorConsumer::consume(error);
-	exit(CErrorType::Runtime);
+void SuMutantExperimentDriver::derive_operator_III() {
+	/* declarations */
+	std::string type2, type3; SuMutantSet * smut;
+	std::map<std::string, SuMutantMerger *> mergers;
+	SuMutantMerger * merger;
+
+	/* iterate subsuming mutants at level-II */
+	const std::map <std::string, SuMutantSet *> 
+		& mut_II = core->get_mutants_II();
+	auto beg = mut_II.begin(), end = mut_II.end();
+	while (beg != end) {
+		/* get next subsuming mutants for operators at level-II */
+		type2 = beg->first; smut = beg->second; beg++;
+
+		/* get the type name at level-III */
+		type_III(type2, type3);
+		if (type3.empty()) continue;
+
+		/* get the type-III mutants */
+		SuMutantSet & mut3 = core->get_mutants_III(type3);
+
+		/* get the merger for the subsuming mutants */
+		merger = nullptr;
+		if (mergers.count(type3) == 0) {
+			merger = new SuMutantMerger();
+			merger->open(mut3);
+			mergers[type3] = merger;
+		}
+		else {
+			auto iter = mergers.find(type3);
+			merger = iter->second;
+		}
+
+		/* append the mutants at level-II to merger */
+		merger->append(*smut);
+	}
+
+	/* merge all the mutants at level-III */
+	auto mbeg = mergers.begin();
+	auto mend = mergers.end();
+	while (mbeg != mend) {
+		type3 = mbeg->first;
+		merger = mbeg->second;
+		mbeg++;
+
+		merger->extract(); 
+		merger->close(); 
+		delete merger;
+	}
+	mergers.clear();
+}
+void SuMutantExperimentDriver::derive_operator_IV() {
+	/* declarations */
+	const std::map<std::string, SuMutantSet *> mut_III = core->get_mutants_III();
+	auto beg = mut_III.begin(), end = mut_III.end(); SuMutantMerger merger;
+
+	/* initial global graph */
+	merger.open(core->get_global_mutants());
+	/* append the mutants in child sets */
+	while (beg != end) {
+		SuMutantSet * mut3 = (beg++)->second;
+		merger.append(*mut3);
+	}
+	/* extract the subsuming mutants from children */
+	merger.extract(); merger.close();
+
+	/* return */ return;
 }
 void SuMutantExperimentDriver::type_II(const std::string & oprt, std::string & type2) {
 	/* initial */ type2 = "";
@@ -266,7 +372,7 @@ void SuMutantExperimentDriver::type_II(const std::string & oprt, std::string & t
 	/* statement-error */
 	else if (oprt == "u-SSDL" || oprt == "I-RetStaDel")
 		type2 = DEL_STATEMENT;
-	else if (oprt == "u-SRSR" || oprt == "u-SWDD" || oprt == "u-SCRB" || oprt == "I-RetStaRep")
+	else if (oprt == "u-SRSR" || oprt == "u-SWDD" || oprt == "u-SCRB" || oprt == "u-SBRC" || oprt == "I-RetStaRep")
 		type2 = REP_STATEMENT;
 	/* operand-error */
 	else if (oprt == "u-Ccsr" || oprt == "u-CRCR")
@@ -287,18 +393,23 @@ void SuMutantExperimentDriver::type_II(const std::string & oprt, std::string & t
 	else if (oprt == "u-OEAA" || oprt == "u-OEBA" || oprt == "u-OESA" || oprt == "u-OELA")
 		type2 = OEXX;
 	else if (oprt == "u-OLAN" || oprt == "u-OLAA" || oprt == "u-OLBA" || oprt == "u-OLBN"
-		|| oprt == "u-OLLA" || oprt == "u-OLLN" || oprt == "u-OLRN" || oprt == "u-OLSA" || oprt == "u-OLSN")
+		|| oprt == "u-OLEA" || oprt == "u-OLLA" || oprt == "u-OLLN" || oprt == "u-OLRN"
+		|| oprt == "u-OLSA" || oprt == "u-OLSN")
 		type2 = OLXX;
+	else if (oprt == "u-OSAN" || oprt == "u-OSAA" || oprt == "u-OSBN" || oprt == "u-OSBA"
+		|| oprt == "u-OSEA" || oprt == "u-OSLA" || oprt == "u-OSLN" || oprt == "u-OSRN"
+		|| oprt == "u-OSSA" || oprt == "u-OSSN")
+		type2 = OSXX;
 	else if (oprt == "u-ORAN" || oprt == "u-ORBN" || oprt == "u-ORRN" || oprt == "u-ORSN" || oprt == "u-ORLN")
 		type2 = ORXX;
 	/* ignored operator */
 	else if (oprt == "I-DirVarRepCon" || oprt == "I-DirVarRepReq" || oprt == "II-ArgRepReq"
 		|| oprt == "II-FunCalDel" || oprt == "I-IndVarRepCon" || oprt == "I-IndVarRepReq"
-		|| oprt == "I-DirVarRepExt" || oprt == "I-DirVarRepClo" || oprt == "I-DirVarRepLoc"
+		|| oprt == "I-DirVarRepExt" || oprt == "I-DirVarRepGlo" || oprt == "I-DirVarRepLoc"
 		|| oprt == "I-DirVarRepPar" || oprt == "I-IndVarRepExt" || oprt == "I-IndVarRepGlo"
 		|| oprt == "I-IndVarRepLoc" || oprt == "I-IndVarRepPar" || oprt == "u-SMTC"
 		|| oprt == "u-SMTT" || oprt == "u-SMVB" || oprt == "u-SSWM" || oprt == "u-OCOR"
-		|| oprt == "II-ArgDel")
+		|| oprt == "II-ArgDel" || oprt == "u-SBRn" || oprt == "u-SGLR")
 		type2 = "";
 	/* unknown list */
 	else {
@@ -308,109 +419,132 @@ void SuMutantExperimentDriver::type_II(const std::string & oprt, std::string & t
 		CErrorConsumer::consume(error);
 		exit(CErrorType::InvalidArguments);
 	}
+
+	/* return */ return;
+}
+void SuMutantExperimentDriver::type_III(const std::string & type2, std::string & type3) {
+	if (type2 == TRAP_STATEMENT || type2 == TRAP_CONDITION || type2 == TRAP_VALUE)
+		type3 = TRAP;
+	else if (type2 == INCDEC_REFER || type2 == INCDEC_VALUE)
+		type3 = INCDEC;
+	else if (type2 == NEG_BOOLEAN || type2 == NEG_BINARYS || type2 == NEG_NUMBERS)
+		type3 = NEG;
+	else if (type2 == OAXX || type2 == OBXX || type2 == OEXX || type2 == OLXX || type2 == ORXX || type2 == OSXX)
+		type3 = OPERATOR;
+	else if (type2 == VAR_TO_CONST || type2 == CONST_TO_CONST || type2 == VAR_TO_VAR)
+		type3 = OPERAND;
+	else if (type2 == DEL_STATEMENT || type2 == REP_STATEMENT)
+		type3 = STATEMENT;
+	else {
+		CError error(CErrorType::InvalidArguments,
+			"SuMutantExperimentDriver::type_III",
+			"Unknown operator: \"" + type2 + "\"");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::InvalidArguments);
+	}
 }
 
 void SuMutantExperimentOutput::write(const SuMutantExperimentCore & core) {
-	/* write _summary_.txt */
-	std::ofstream out1(dir->get_path() + "/_summary_.txt");
-	this->write_summary(core, out1); out1.close();
+	/* write prevalence.txt */
+	std::ofstream out1(dir->get_path() + "/prevalence.txt");
+	this->write_prevalence(core, out1); out1.close();
 
-	/* write for each operator.txt */
-	const std::set <std::string> & keys = core.get_keys();
-	auto beg = keys.begin(), end = keys.end();
-	while (beg != end) {
-		const std::string & key = *(beg++);
-		const SuMutantSet & smut = core.get_subsuming_mutants(key);
-		
-		std::ofstream out2(dir->get_path() + "/" + key + ".txt");
-		this->write_mutants(smut, out2); out2.close();
-	}
+	/* write mutations.txt */
+	std::ofstream out2(dir->get_path() + "/mutations.txt");
+	this->write_mutations(core, out2); out2.close();
 }
-void SuMutantExperimentOutput::write_summary(
-	const SuMutantExperimentCore & core, std::ostream & out) {
-	out << "operator\tequivalence\tsubsuming mutants\tsubsuming clusters\ttotal\n";
+void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & core, std::ostream & out) {
+	/* get mutant sets in core data */
+	const std::map<std::string, SuMutantSet *> & mut_I = core.get_mutants_I();
+	const std::map<std::string, SuMutantSet *> & mut_II = core.get_mutants_II();
+	const std::map<std::string, SuMutantSet *> & mut_III = core.get_mutants_III();
+	const SuMutantSet & global_mut = core.get_mutants_IV();
 
-	const std::set <std::string> & keys = core.get_keys();
-	auto beg = keys.begin(), end = keys.end();
-	while (beg != end) {
-		/* get next operator and its mutants */
-		const std::string & oprt = *(beg++);
-		const SuMutantSet & smut = core.get_subsuming_mutants(oprt);
-		/* get the mutants by their categories */
-		const MutantSet * eqs = smut.get_equivalent_mutants();
-		const std::set<MuCluster *> & sclusters = smut.get_subsuming_clusters();
-		const MutantSet & smutants = smut.get_subsuming_mutants();
-		MSGraph & graph = smut.get_graph();
-
-		/* output line */
-		out << oprt << "\t";
-		if (eqs == nullptr) out << 0;
-		else out << eqs->number_of_mutants();
-		out << "\t" << smutants.number_of_mutants() << "\t";
-		out << sclusters.size() << "\t";
-		out << graph.get_mutants().number_of_mutants() << "\n";
-	}
-}
-void SuMutantExperimentOutput::write_mutants(
-	const SuMutantSet & smut, std::ostream & out) {
-	/* validate */
-	if (dir == nullptr) {
-		CError error(CErrorType::Runtime,
-			"SuMutantExperimentOutput::write_mutants", "No file is opened");
-		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
-	}
-
-	/* get the mutants in the graph */
-	MSGraph & graph = smut.get_graph();
-	MutantSpace & mspace = graph.get_space();
-	const MutantSet & mutants = graph.get_mutants();
+	/* for iterating mutants in the space */
+	MutantSpace & mspace = core.get_space();
+	Mutant::ID k = 0, mid, num = mspace.number_of_mutants();
 	const TextBuild & text = *(mspace.get_code_file().get_text());
+	std::string origin, replace, type1, type2, type3;
 
-	/* title */
-	out << "mutant\tcluster\toperator\tline\torigin\treplace\tcategory\n";
+	/* title for table */
+	out << "mid\tline\torigin\treplace\ttyI\tcid\tcat\ttyII\tcid\tcat\ttyIII\tcid\tcat\tcid\tcat\n";
 
 	/* iterate each mutant in the space */
-	Mutant::ID mid = 0, num = mspace.number_of_mutants();
-	while (mid < num) {
-		/* get the next mutant in the graph */
-		if (mutants.has_mutant(mid)) {
-			/* get next mutant */
-			Mutant & mutant = mspace.get_mutant(mid);
-			MuCluster & cluster = graph.get_cluster_of(mid);
-			const std::string & oprt = mutant.get_operator();
-			const Mutation & mutation = 
-				mutant.get_mutation(mutant.get_orders() - 1);
-			const CodeLocation & loc = mutation.get_location();
-			size_t line = text.lineOfIndex(loc.get_bias());
-			std::string origin = loc.get_text_at();
-			std::string replace = mutation.get_replacement();
-			trim(origin); trim(replace);
+	while (k < num) {
+		/* get the next mutant in the space */
+		Mutant & mutant = mspace.get_mutant(k++);
+		mid = mutant.get_id();
+		const Mutation & mutation = 
+			mutant.get_mutation(mutant.get_orders() - 1);
+		const CodeLocation & loc = mutation.get_location();
+		origin = loc.get_text_at();
+		replace = mutation.get_replacement();
+		trim(origin); trim(replace);
 
-			/* output line */ 
-			out << mutant.get_id() << "\t" << cluster.get_id() << "\t";
-			out << oprt << "\t" << line << "\t" << origin << "\t" << replace << "\t";
+		/* base head for mutant */
+		out << mutant.get_id() << "\t";
+		out << text.lineOfIndex(loc.get_bias()) << "\t";
+		out << origin << "\t" << replace << "\t";
 
-			/* category */
-			switch (smut.get_category_of(mid)) {
-			case SuMutantSet::equivalent:
-				out << "equivalent";	break;
-			case SuMutantSet::subsuming:
-				out << "subsuming";		break;
-			case SuMutantSet::subsumed:
-				out << "subsumed";		break;
-			default:
-				CError error(CErrorType::Runtime, 
-					"SuMutantExperimentOutput::write_mutants", "Unknown category.");
-				CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+		/* it's one of the mutant in some type-I cluster */
+		type1 = mutant.get_operator();
+		if (mut_I.count(type1) > 0) {
+			/* get the subsuming set where the mutant is defined */
+			auto iter1 = mut_I.find(type1);
+			SuMutantSet & smut1 = *(iter1->second);
+
+			if (smut1.has_mutant(mid)) {
+				/* print information of category in level-I */
+				out << type1 << "\t";
+				out << smut1.get_cluster_of(mid).get_id() << "\t";
+				out << get_category(smut1, mid) << "\t";
+
+				/* to parent level */
+				SuMutantExperimentDriver::type_II(type1, type2);
+				if (!type2.empty() && mut_II.count(type2)) {
+					/* get the subsuming set of level-II where the mutant is defined */
+					auto iter2 = mut_II.find(type2);
+					SuMutantSet & smut2 = *(iter2->second);
+
+					if (smut2.has_mutant(mid)) {
+						/* print information of category in level-II */
+						out << type2 << "\t";
+						out << smut2.get_cluster_of(mid).get_id() << "\t";
+						out << get_category(smut2, mid) << "\t";
+
+						/* to parent level */
+						SuMutantExperimentDriver::type_III(type2, type3);
+						if (!type3.empty() && mut_III.count(type3)) {
+							/* get the subsuming set of level-III */
+							auto iter3 = mut_III.find(type3);
+							SuMutantSet & smut3 = *(iter3->second);
+
+							if (smut3.has_mutant(mid)) {
+								/* print information of category in level-III */
+								out << type3 << "\t";
+								out << smut3.get_cluster_of(mid).get_id() << "\t";
+								out << get_category(smut3, mid) << "\t";
+
+								/* to parent set */
+								if (global_mut.has_mutant(mid)) {
+									out << global_mut.get_cluster_of(mid).get_id() << "\t";
+									out << get_category(global_mut, mid);
+								}	/* end if: global */
+							}
+						}
+					}
+				}
 			}
-			out << "\n";
-		}
+		} /* end if: type1 */
 
-		/* to the next one */
-		mid = mid + 1; 
+		/* to the next line */ 
+		out << "\n"; 
 	} /* end while */
 
-	/* end */ out << std::endl;
+	/* #EOF */ out << std::endl; 
+}
+void SuMutantExperimentOutput::write_prevalence(const SuMutantExperimentCore & core, std::ostream & out) {
+	// do nothing...
 }
 void SuMutantExperimentOutput::trim(std::string & str) {
 	std::string buffer;
@@ -422,6 +556,20 @@ void SuMutantExperimentOutput::trim(std::string & str) {
 	}
 	str = buffer;
 }
+std::string SuMutantExperimentOutput::get_category(const SuMutantSet & smut, Mutant::ID mid) {
+	switch (smut.get_category_of(mid)) {
+	case SuMutantSet::equivalent:	return "equivalent";
+	case SuMutantSet::subsuming:	return "subsuming";
+	case SuMutantSet::subsumed:		return "subsumed";
+	case SuMutantSet::not_belong:	return "";
+	default:
+		CError error(CErrorType::Runtime, 
+			"SuMutantExperimentOutput::get_category", 
+			"Unknown category");
+		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+	}
+}
+
 
 /* load the tests and mutants into the project */
 static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
@@ -442,12 +590,36 @@ static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
 	}
 }
+/* global subsuming mutants */
+static void compute_subsumings(const CodeFile & cfile, MutantSet & mutants, TestSet & tests, CScore & cscore) {
+	// get score vector producer | consumer
+	ScoreSource & score_src = cscore.get_source(cfile);
+	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	ScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+
+	MSGraph graph(mutants.get_space());
+	MSGBuilder builder; ScoreVector * score_vector;
+
+	builder.open(graph);
+	while ((score_vector = producer.produce()) != nullptr) {
+		Mutant::ID mid = score_vector->get_mutant();
+		const BitSeq & bits = score_vector->get_vector();
+		builder.add(mid, bits);
+		consumer.consume(score_vector);
+	}
+	builder.link(); 
+	builder.close();
+
+	SuMutantSet smut("global", graph);
+	std::cerr << "Subsuming Mutants: " << smut.get_subsuming_mutants().number_of_mutants()
+		<< " {" << smut.get_subsuming_clusters().size() << "}\n";
+}
 
 /* test main */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "mid";
+	std::string prname = "bubble";
 	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
@@ -501,12 +673,17 @@ int main() {
 		driver.start(core);
 		driver.derive_operator_I(producer, consumer);
 		driver.derive_operator_II();
+		driver.derive_operator_III();
+		driver.derive_operator_IV();
 		driver.finish();
 
 		// print the experiment result.
 		output.open(*dir);
 		output.write(core);
 		output.close();
+
+		// test 
+		compute_subsumings(cfile, mutants, tests, cscore);
 
 		std::cout << "Experiment finished: \"" << cfile.get_file().get_path() << "\"\n";
 	}
