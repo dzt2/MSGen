@@ -359,7 +359,7 @@ void SuMutantExperimentDriver::type_II(const std::string & oprt, std::string & t
 	else if (oprt == "u-SRSR" || oprt == "u-SWDD" || oprt == "u-SCRB" || oprt == "u-SBRC" || oprt == "I-RetStaRep")
 		type2 = REP_STATEMENT;
 	/* operand-error */
-	else if (oprt == "u-Ccsr" || oprt == "u-CRCR")
+	else if (oprt == "u-Ccsr" || oprt == "u-CRCR" || oprt == "u-VSCR")
 		type2 = VAR_TO_CONST;
 	else if (oprt == "u-Cccr")
 		type2 = CONST_TO_CONST;
@@ -467,6 +467,24 @@ void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & co
 			SuMutantSet & smut1 = *(iter1->second);
 
 			if (smut1.has_mutant(mid)) {
+				/* get its content */
+				const Mutation & mutation =
+					mutant.get_mutation(mutant.get_orders() - 1);
+				const CodeLocation & loc = mutation.get_location();
+				origin = loc.get_text_at();
+				replace = mutation.get_replacement();
+				trim(origin); trim(replace);
+
+				/* base head for mutant */
+				out << mutant.get_id() << "\t";
+				out << text.lineOfIndex(loc.get_bias()) << "\t";
+				out << origin << "\t" << replace << "\t";
+
+				/* print information of category in level-I */
+				out << type1 << "\t";
+				out << smut1.get_cluster_of(mid).get_id() << "\t";
+				out << get_category(smut1, mid) << "\t";
+
 				/* to parent level */
 				SuMutantExperimentDriver::type_II(type1, type2);
 				if (!type2.empty() && mut_II.count(type2)) {
@@ -475,24 +493,6 @@ void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & co
 					SuMutantSet & smut2 = *(iter2->second);
 
 					if (smut2.has_mutant(mid)) {
-						/* get its content */
-						const Mutation & mutation =
-							mutant.get_mutation(mutant.get_orders() - 1);
-						const CodeLocation & loc = mutation.get_location();
-						origin = loc.get_text_at();
-						replace = mutation.get_replacement();
-						trim(origin); trim(replace);
-
-						/* base head for mutant */
-						out << mutant.get_id() << "\t";
-						out << text.lineOfIndex(loc.get_bias()) << "\t";
-						out << origin << "\t" << replace << "\t";
-
-						/* print information of category in level-I */
-						out << type1 << "\t";
-						out << smut1.get_cluster_of(mid).get_id() << "\t";
-						out << get_category(smut1, mid) << "\t";
-
 						/* print information of category in level-II */
 						out << type2 << "\t";
 						out << smut2.get_cluster_of(mid).get_id() << "\t";
@@ -518,10 +518,10 @@ void SuMutantExperimentOutput::write_mutations(const SuMutantExperimentCore & co
 								}	/* end if: global */
 							}
 						}
-
-						/* to the next line */ out << "\n";
 					}
 				}
+
+				/* to the next line */ out << "\n";
 			}
 		}
 	} /* end while */
@@ -603,8 +603,8 @@ static void compute_subsumings(const CodeFile & cfile, MutantSet & mutants, Test
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "Day";
-	TestType ttype = TestType::general;
+	std::string prname = "tcas";
+	TestType ttype = TestType::tcas;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
