@@ -52,16 +52,27 @@ void SuMutantMerger::append(SuMutantSet & smuts) {
 	const MutantSet & mutants = smuts.get_subsuming_mutants();
 	MutantSpace & mspace = mutants.get_space();
 	Mutant::ID mid = 0, num = mspace.number_of_mutants();
-	
 	MSGraph & graph = smuts.get_graph();
+
+	/* compute the subsuming mutant (without duplicated) in parent graph */
+	records.clear();
 	while (mid < num) {
 		if (mutants.has_mutant(mid)) {
+			/* get the cluster of this mutant */
 			MuCluster & cluster = graph.get_cluster_of(mid);
-			const BitSeq & bits = cluster.get_score_vector();
-			builder.add(mid, bits);
+
+			/* to avoid duplicated subsuming mutant */
+			if (records.count(&cluster) == 0) {
+				/* add subsuming mutant (without duplication) to parent graph */
+				const BitSeq & bits = cluster.get_score_vector();
+				builder.add(mid, bits);
+
+				/* record the cluster */ records.insert(&cluster);
+			}
 		}
 		/* to the next mutant */ mid = mid + 1;
 	}
+	records.clear();
 }
 void SuMutantMerger::extract() {
 	builder.link(); 
@@ -603,7 +614,7 @@ static void compute_subsumings(const CodeFile & cfile, MutantSet & mutants, Test
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "triangle";
+	std::string prname = "bubble";
 	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 

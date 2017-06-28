@@ -111,8 +111,12 @@ public:
 	void close() { builder.close(); answer = nullptr; }
 
 private:
+	/* builder for MSG in target subsuming set (answer) */
 	MSGBuilder builder;
+	/* subsuming set to be built up */
 	SuMutantSet * answer;
+	/* used for recoding duplicated mutants in append */
+	std::set<MuCluster *> records;
 };
 
 const static char TRAP_STATEMENT[]	= "trap-stmt";
