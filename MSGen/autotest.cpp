@@ -216,3 +216,19 @@ int main() {
 	getchar(); exit(0);
 }
 */
+
+/* Calendar.c */
+/*
+int main() {
+	std::string prefix = "../../../MyData/SiemensSuite/";
+	std::string prname = "Calendar";
+	std::ofstream out(prefix + prname + "/tsuite");
+
+	int lower = -405, upper = 871;
+	for (int i = lower; i <= upper; i++)
+		out << i << "\n";
+	out.close();
+
+	return 0;
+}
+*/

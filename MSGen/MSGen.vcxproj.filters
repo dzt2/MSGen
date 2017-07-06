@@ -66,7 +66,7 @@
     <ClInclude Include="mgraph.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
-    <ClInclude Include="smerge.h">
+    <ClInclude Include="submut.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
   </ItemGroup>
@@ -107,7 +107,7 @@
     <ClCompile Include="autotest.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
-    <ClCompile Include="smerge.cpp">
+    <ClCompile Include="submut.cpp">
       <Filter>Source Files\graph</Filter>
     </ClCompile>
   </ItemGroup>
