@@ -163,6 +163,7 @@ Mutant::ID MutLevel::get_mutant_of(const MuCluster & cluster) {
 	CErrorConsumer::consume(error);
 	exit(CErrorType::Runtime);
 }
+static std::set<std::string> debug_operators;
 bool MutLevel::valid_operator(const std::string & op) {
 	if (op == "I-CovAllNod" || op == "I-CovAllEdg" || op == "u-VDTR"
 		|| op == "u-VTWD" || op == "I-DirVarIncDec" || op == "I-IndVarIncDec" || op == "u-Oido"
@@ -181,7 +182,10 @@ bool MutLevel::valid_operator(const std::string & op) {
 		|| op == "u-OSAN" || op == "u-OSAA" || op == "u-OSBN" || op == "u-OSBA" || op == "u-OSEA" || op == "u-OSRN" || op == "u-OSLN" || op == "u-OSLA" || op == "u-OSSN" || op == "u-OSSA"
 		|| op == "u-ORAN" || op == "u-ORAA" || op == "u-ORBN" || op == "u-ORBA" || op == "u-OREA" || op == "u-ORRN" || op == "u-ORLN" || op == "u-ORLA" || op == "u-ORSN" || op == "u-ORSA"
 		|| op == "u-OEAN" || op == "u-OEAA" || op == "u-OEBN" || op == "u-OEBA" || op == "u-OERN" || op == "u-OELN" || op == "u-OELA" || op == "u-OESN" || op == "u-OESA") return true;
-	else return false;
+	else {
+		debug_operators.insert(op);
+		return false;
+	}
 }
 
 MutOutputer::MutOutputer(const File & root) {
@@ -214,9 +218,11 @@ void MutOutputer::write(const MutLevel & data) {
 }
 void MutOutputer::write_summary(const MutLevel & data, std::ostream & out) {
 	/* declarations */
-	size_t M = 0, K = 0, E = 0, S = 0, T = 0;
+	size_t M = 0, K = 0, E = 0, S = 0, T = 0, P = 0, SP = 0;
 	MutantSpace & mspace = data.get_space();
 	Mutant::ID mid = 0, num = mspace.number_of_mutants();
+	std::set<std::string> sops;
+	const MutGroup & global_group = data.get_global_group();
 
 	/* iterate the mutant in space */
 	while (mid < num) {
@@ -228,7 +234,6 @@ void MutOutputer::write_summary(const MutLevel & data, std::ostream & out) {
 		if (data.has_operator(op)) {
 			/* get groups for category */
 			const MutGroup & op_group = data.get_operator_group(op);
-			const MutGroup & global_group = data.get_global_group();
 
 			/* valid mutant in the group-operator */
 			if (op_group.get_mutants().has_mutant(mid)) {
@@ -238,12 +243,14 @@ void MutOutputer::write_summary(const MutLevel & data, std::ostream & out) {
 				case Equvalent_Category:
 					E++; break;
 				case Subsuming_Category:
-					S++; 
-					if (global_group.category_of(mid) == Subsuming_Category)
-						T++;
+					S++; K++;
+					if (global_group.category_of(mid) 
+						== Subsuming_Category) {
+						T++; sops.insert(op);
+					}
 					break;
 				case Subsumed_Category:
-					break;
+					K++; break;
 				default:
 					CError error(CErrorType::Runtime, 
 						"MutOutputer::write_summary", 
@@ -257,12 +264,20 @@ void MutOutputer::write_summary(const MutLevel & data, std::ostream & out) {
 		mid = mid + 1;	/* increase to the next mutant */
 	} /* end while */
 
+	/* operators */ 
+	P = data.get_operators().size(); 
+	SP = sops.size();
+
 	/* output */
 	out << "#Mutants: " << M << "\n";
 	out << "#Killed: " << K << "\n";
 	out << "#Equivalence: " << E << "\n";
 	out << "#Op-Subsuming: " << S << "\n";
+	out << "#Op-Subsuming-Min: " << global_group.get_mutants().number_of_mutants() << "\n";
 	out << "#Subsumings: " << T << "\n";
+	out << "#Subsumings-Min: " << global_group.get_subsumings().size() << "\n";
+	out << "#Operators: " << P << "\n";
+	out << "#Subsuming-Ops: " << SP << "\n";
 	out << std::endl;
 
 	/* return */ return;
@@ -346,7 +361,7 @@ void MutOutputer::write_distribution(const MutLevel & data, std::ostream & out) 
 	auto beg = oprts.begin(), end = oprts.end();
 	MutantSpace & mspace = data.get_space();
 
-	out << "operator\t#Mutants\t#Equivalent\t#Op-Subsuming\t#Global-Subsuming\n";
+	out << "operator\t#Mutants\t#Equivalent\t#Op-S-Min\t#G-S\n";
 	const MutGroup & global_group = data.get_global_group();
 	while (beg != end) {
 		const std::string & oprt = *(beg++);
@@ -413,7 +428,7 @@ static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "bubble";
+	std::string prname = "Day";
 	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
@@ -460,6 +475,7 @@ int main() {
 
 		// get experiment analyzer and data 
 		MutAnalyzer analyzer(mspace);
+		debug_operators.clear();
 		analyzer.update(producer, consumer);
 		MutLevel & data = analyzer.get_data();
 		std::cout << "Compute subsuming mutants: finished\n";
@@ -474,6 +490,16 @@ int main() {
 	delete &cscore;
 	delete &cmutant; delete &ctest;
 	delete &program; delete &root;
+
+	/* debug operators */
+	auto cbeg = debug_operators.begin();
+	auto cend = debug_operators.end();
+	std::cout << "\nUnused operators:\n";
+	while (cbeg != cend) {
+		const std::string & op = *(cbeg++);
+		std::cout << op << "\n";
+	}
+	std::cout << "\n";
 
 	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
