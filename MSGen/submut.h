@@ -13,9 +13,9 @@
 /* class declaration */
 class MutGroup;
 class MutLevel;
-class MutScore;
 class MutAnalyzer;
 class MutOutputer;
+class TestMachine;
 
 /* category for mutant */
 typedef char MutCategory;
@@ -172,3 +172,38 @@ private:
 	/* delete lines and \t from the string text */
 	void trim(std::string &);
 };
+
+/* TestMachine provides following functions:
+	1. select subsuming mutants from selective operators;
+	2. generate minimal test set for the selected mutants;
+	3. evaluate dominator score of tests in the context.
+*/
+class TestMachine {
+public:
+	/* create an unintialized machine */
+	TestMachine() : context(nullptr) {}
+	/* deconstructor */
+	~TestMachine() { close(); }
+
+	/* initial the machine by context of subsuming mutants */
+	void start(const MutLevel & data) { close(); context = &data; }
+	/* select subsuming mutants from given context */
+	void select(const std::set<std::string> &, MutantSet &);
+	/* generate minimal test set for given mutants */
+	void generate(const MutantSet &, TestSet &);
+	/* evaluate the dominator score for tests against subsuming mutants in the context  */
+	double evaluate(const TestSet &);
+	/* close the machine */
+	void close() { context = nullptr; }
+
+private:
+	const MutLevel * context;
+
+	/* find the first mutant in given set */
+	Mutant::ID find_mutant_of(const MutantSet &);
+	/* find the first test in score vector that kill some mutant */
+	TestCase::ID find_test_in(const BitSeq &);
+	/* whether the cluster can be killed by the tests */
+	bool kill_cluster(const MuCluster &, const TestSet &);
+};
+
