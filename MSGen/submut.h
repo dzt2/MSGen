@@ -15,6 +15,7 @@ class MutGroup;
 class MutLevel;
 class MutAnalyzer;
 class MutOutputer;
+
 class TestMachine;
 
 /* category for mutant */
@@ -173,37 +174,49 @@ private:
 	void trim(std::string &);
 };
 
-/* TestMachine provides following functions:
-	1. select subsuming mutants from selective operators;
-	2. generate minimal test set for the selected mutants;
-	3. evaluate dominator score of tests in the context.
-*/
+/* machine for evaluating selective operators */
 class TestMachine {
 public:
-	/* create an unintialized machine */
-	TestMachine() : context(nullptr) {}
+	/* create a closed machine for test generation */
+	TestMachine(const MutLevel & ctxt) : context(ctxt), operators() {}
 	/* deconstructor */
 	~TestMachine() { close(); }
 
-	/* initial the machine by context of subsuming mutants */
-	void start(const MutLevel & data) { close(); context = &data; }
-	/* select subsuming mutants from given context */
-	void select(const std::set<std::string> &, MutantSet &);
-	/* generate minimal test set for given mutants */
-	void generate(const MutantSet &, TestSet &);
-	/* evaluate the dominator score for tests against subsuming mutants in the context  */
+	/* set the context for test generation */
+	void start(const std::set<std::string> &);
+	/* generate a minimal test set for subsuming mutants in given operators */
+	void generate(TestSet &);
+	/* evaluate the dominator score of given test suite */
 	double evaluate(const TestSet &);
-	/* close the machine */
-	void close() { context = nullptr; }
+	/* close the test machine for generation */
+	void close() { operators.clear(); }
+
+	/* get the context where tests are generated */
+	const MutLevel & get_context() const { return context; }
+	/* get the subsuming operators selected by start() */
+	const std::set<std::string> & get_selected_operators() const { return operators; }
 
 private:
-	const MutLevel * context;
+	/* context for test generation */
+	const MutLevel & context;
+	/* selected operators */
+	std::set<std::string> operators;
 
-	/* find the first mutant in given set */
-	Mutant::ID find_mutant_of(const MutantSet &);
-	/* find the first test in score vector that kill some mutant */
-	TestCase::ID find_test_in(const BitSeq &);
-	/* whether the cluster can be killed by the tests */
-	bool kill_cluster(const MuCluster &, const TestSet &);
+protected:
+	/* select minimal test template for given requirements (greedy algorithm), the requirements will be */
+	void select_minimal_template(
+		const std::set<MuCluster *> & requirements,
+		std::vector<BitSeq *> & templates,
+		const TestSpace & test_space
+	);
+	/* find the kth 1 in bit sequence*/
+	TestCase::ID find_test_at(const BitSeq &, TestCase::ID);
+	/* generate tests from template by given seeds */
+	void generate_test_suite(
+		const std::vector<BitSeq *> & templates,
+		const std::vector<unsigned> & seeds,
+		TestSet & tests
+	);
+	/* whether the tests can kill specified cluster */
+	bool is_killed(const TestSet &, const MuCluster &);
 };
-

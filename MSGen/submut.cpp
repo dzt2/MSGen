@@ -174,6 +174,10 @@ bool MutLevel::valid_operator(const std::string & op) {
 		|| op == "u-SBRC" || op == "u-SCRB"
 		|| op == "u-SRSR" || op == "u-SSDL"
 		|| op == "u-SDWD" || op == "u-SWDD"
+		/* new considered */
+		|| op == "u-SMTC" || op == "u-SMTC" || op == "u-SMVB"
+		|| op == "u-STRI" || op == "u-STRP" || op == "u-SSWM"
+		/* end: new considered */
 		|| op == "u-Cccr" || op == "u-Ccsr" || op == "u-CRCR"
 		|| op == "u-VLSR" || op == "u-VGSR" || op == "u-VLPR" || op == "u-VGPR"
 		|| op == "u-OAAN" || op == "u-OAAA" || op == "u-OABN" || op == "u-OABA" || op == "u-OAEA" || op == "u-OARN" || op == "u-OALN" || op == "u-OALA" || op == "u-OASN" || op == "u-OASA"
@@ -217,70 +221,54 @@ void MutOutputer::write(const MutLevel & data) {
 	write_distribution(data, out3); out3.close();
 }
 void MutOutputer::write_summary(const MutLevel & data, std::ostream & out) {
-	/* declarations */
-	size_t M = 0, K = 0, E = 0, S = 0, T = 0, P = 0, SP = 0;
+	/* declaration */
+	size_t M = 0, E = 0, OpS = 0, GS = 0, Op = 0, SOp = 0;
 	MutantSpace & mspace = data.get_space();
-	Mutant::ID mid = 0, num = mspace.number_of_mutants();
-	std::set<std::string> sops;
-	const MutGroup & global_group = data.get_global_group();
+	const MutGroup & group = data.get_global_group();
 
-	/* iterate the mutant in space */
-	while (mid < num) {
-		/* get next mutant */
+	/* count global-subsuming mutant */
+	std::set<std::string> SOpSet;
+
+	/* iterate global-subsuming mutants */
+	Mutant::ID mid, num = mspace.number_of_mutants();
+	for (mid = 0; mid < num; mid++) {
 		Mutant & mutant = mspace.get_mutant(mid);
-		const std::string & op = mutant.get_operator();
+		if (group.category_of(mid) == Subsuming_Category) {
+			SOpSet.insert(mutant.get_operator()); GS++;
+		}
+	}
+	SOp = SOpSet.size(); Op = data.get_operators().size();
 
-		/* valid mutant with valid operator */
-		if (data.has_operator(op)) {
-			/* get groups for category */
-			const MutGroup & op_group = data.get_operator_group(op);
+	/* iterate each operators */
+	auto beg = data.get_operators().begin();
+	auto end = data.get_operators().end();
+	while (beg != end) {
+		/* get next operator-group */
+		const std::string & op = *(beg++);
+		if (SOpSet.count(op) == 0) continue;
+		const MutGroup & op_group = data.get_operator_group(op);
 
-			/* valid mutant in the group-operator */
-			if (op_group.get_mutants().has_mutant(mid)) {
-				M++;	/* increase valid mutant */
+		/* count total mutants */
+		M += op_group.get_mutants().number_of_mutants();
 
-				switch (op_group.category_of(mid)) {
-				case Equvalent_Category:
-					E++; break;
-				case Subsuming_Category:
-					S++; K++;
-					if (global_group.category_of(mid) 
-						== Subsuming_Category) {
-						T++; sops.insert(op);
-					}
-					break;
-				case Subsumed_Category:
-					K++; break;
-				default:
-					CError error(CErrorType::Runtime, 
-						"MutOutputer::write_summary", 
-						"Invalid category");
-					CErrorConsumer::consume(error);
-					exit(CErrorType::Runtime);
-				}
-			}
+		/* count equivalent */
+		if (op_group.get_equivalents() != nullptr) {
+			E += (*(op_group.get_equivalents())).size();
 		}
 
-		mid = mid + 1;	/* increase to the next mutant */
-	} /* end while */
-
-	/* operators */ 
-	P = data.get_operators().size(); 
-	SP = sops.size();
+		/* count op-subsuming */
+		OpS += op_group.get_subsumings().size();
+	}
 
 	/* output */
 	out << "#Mutants: " << M << "\n";
-	out << "#Killed: " << K << "\n";
-	out << "#Equivalence: " << E << "\n";
-	out << "#Op-Subsuming: " << S << "\n";
-	out << "#Op-Subsuming-Min: " << global_group.get_mutants().number_of_mutants() << "\n";
-	out << "#Subsumings: " << T << "\n";
-	out << "#Subsumings-Min: " << global_group.get_subsumings().size() << "\n";
-	out << "#Operators: " << P << "\n";
-	out << "#Subsuming-Ops: " << SP << "\n";
-	out << std::endl;
+	out << "#Equivalent: " << E << "\n";
+	out << "#Op-Subsume: " << OpS << "\n";
+	out << "#Subsumings: " << GS << "\n";	/* op-subsuming for subsuming operators */
+	out << "#Operators: " << Op << "\n";
+	out << "\#Subsume-Ops: " << SOp << "\n";
 
-	/* return */ return;
+	/* return */ out << std::endl; return;
 }
 void MutOutputer::write_mutants(const MutLevel & data, std::ostream & out) {
 	/* declarations */
@@ -356,40 +344,69 @@ void MutOutputer::write_mutants(const MutLevel & data, std::ostream & out) {
 	out << std::endl; return;
 }
 void MutOutputer::write_distribution(const MutLevel & data, std::ostream & out) {
-	/* getters */
-	const std::set<std::string> oprts = data.get_operators();
-	auto beg = oprts.begin(), end = oprts.end();
-	MutantSpace & mspace = data.get_space();
+	/* count global-subsuming for each operator */
+	const MutGroup & group = data.get_global_group();
+	std::map<std::string, size_t> op_subsumings;
+	MutantSpace & mspace = data.get_space(); size_t GS = 0;
+	Mutant::ID mid, num = mspace.number_of_mutants();
+	for (mid = 0; mid < num; mid++) {
+		if (group.category_of(mid) == Subsuming_Category) {
+			Mutant & mutant = mspace.get_mutant(mid);
+			const std::string & op = mutant.get_operator();
+			if (op_subsumings.count(op) == 0)
+				op_subsumings[op] = 0;
 
-	out << "operator\t#Mutants\t#Equivalent\t#Op-S-Min\t#G-S\n";
-	const MutGroup & global_group = data.get_global_group();
-	while (beg != end) {
-		const std::string & oprt = *(beg++);
-		const MutGroup & group = data.get_operator_group(oprt);
-		size_t M = 0, E = 0, S = 0, T = 0;
-
-		Mutant::ID mid = 0, num = mspace.number_of_mutants();
-		while (mid < num) {
-			/* count by mutant category */
-			switch (group.category_of(mid)) {
-			case Equvalent_Category:
-				M++; E++; break;
-			case Subsuming_Category:
-				M++; S++; 
-				if (global_group.category_of(mid) == Subsuming_Category)
-					T++;
-				break;
-			case Subsumed_Category:
-				M++; break;
-			default: break;
-			}
-
-			mid = mid + 1;	/* increase to the next */
-		}	/* end while for op-mutants */
-
-		out << oprt << "\t" << M << "\t" << E << "\t" << S << "\t" << T << "\n";
+			auto iter = op_subsumings.find(op);
+			size_t count = iter->second; GS++;
+			op_subsumings[op] = count + 1;
+		}
 	}
-	out << std::endl; return;
+
+	/* print title */
+	out << "Op\t#Mut\tEquiv\tOp-Su\tG-Su\tEfficiency\tContribution\n";
+	const std::set<std::string> & operators = data.get_operators();
+	
+	/* print lines */
+	auto obeg = operators.begin(), oend = operators.end();
+	while (obeg != oend) {
+		/* get next operator group */
+		const std::string & op = *(obeg++);
+		const MutGroup & op_group = data.get_operator_group(op);
+
+		/* #Mut */
+		size_t M = op_group.get_mutants().number_of_mutants();
+
+		/* #Equiv */
+		size_t E = 0;
+		if (op_group.get_equivalents() != nullptr)
+			E = op_group.get_equivalents()->size();
+
+		/* #Op-Su */
+		size_t OpS = op_group.get_subsumings().size();
+
+		/* #G-Su */
+		size_t GSu = 0;
+		if (op_subsumings.count(op) > 0) {
+			auto iter = op_subsumings.find(op);
+			GSu = iter->second;
+		}
+
+		/* efficiency */
+		double eff = ((double)GSu) / ((double)OpS);
+		double ctr = ((double)GSu) / GS;
+
+		/* output */
+		out << op << "\t";
+		out << M << "\t";
+		out << E << "\t";
+		out << OpS << "\t";
+		out << GSu << "\t";
+		out << eff << "\t";
+		out << ctr << "\n";
+	}
+	op_subsumings.clear();
+
+	/* return */ out << std::endl; return;
 }
 void MutOutputer::trim(std::string & str) {
 	std::string bak; char ch;
@@ -404,168 +421,180 @@ void MutOutputer::trim(std::string & str) {
 	str = bak;
 }
 
-void TestMachine::select(const std::set<std::string> 
-	& operators, MutantSet & mutants) {
-	/* validation */
-	if (context == nullptr) {
-		CError error(CErrorType::Runtime,
-			"TestMachine::select",
-			"Invalid access to unopened machine");
-		CErrorConsumer::consume(error);
-		exit(CErrorType::Runtime);
+void TestMachine::start(const std::set<std::string> & ops) {
+	close();
+	auto beg = ops.begin(), end = ops.end();
+	while (beg != end) {
+		const std::string & op = *(beg++);
+		if(context.has_operator(op))
+			operators.insert(op);
 	}
-	else if (&(mutants.get_space()) != &(context->get_space())) {
-		CError error(CErrorType::InvalidArguments, 
-			"TestMachine::select", 
-			"Inconsistent mutant space");
-		CErrorConsumer::consume(error); 
-		exit(CErrorType::InvalidArguments);
-	}
-	else mutants.clear();
+}
+double TestMachine::evaluate(const TestSet & tests) {
+	/* initialization */
+	const MutGroup & group = context.get_global_group(); 
+	const std::set<MuCluster *> & dom_mutants = group.get_subsumings();
+	size_t K = 0, M = dom_mutants.size();
 
+	/* validation */
+	if (M == 0) {
+		CError error(CErrorType::Runtime, "TestMachine::evaluate", 
+			"Invalid context: empty global subsuming mutants");
+		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
+	}
+
+	/* count the number of killed dominator mutants */
+	auto beg = dom_mutants.begin(), end = dom_mutants.end();
+	while (beg != end) {
+		MuCluster & cluster = *(*(beg++));
+		if (is_killed(tests, cluster)) {
+			K++; 
+		}
+	}
+
+	/* TODO evaluate information */
+	std::cerr << "Dominator score: " << K << "/" << M << "\n";
+
+	/* return */ return ((double) K) / ((double) M);
+}
+bool TestMachine::is_killed(const TestSet & tests, const MuCluster & cluster) {
+	const BitSeq & tseq = tests.get_set_vector();
+	const BitSeq & mseq = cluster.get_score_vector();
+	BitSeq rseq(mseq); rseq.conjunct(tseq);
+	//std::cerr << "\tResult: " << rseq.degree() << "\t" << rseq.all_zeros() << "\t" << !(rseq.all_zeros()) << "\n";
+	return !(rseq.all_zeros());
+}
+void TestMachine::generate(TestSet & tests) {
+	/* set requirements */
+	std::set<MuCluster *> requirements;
+
+	/* add all subsuming clusters into requirements */
 	auto obeg = operators.begin();
 	auto oend = operators.end();
 	while (obeg != oend) {
-		/* get next included operator */
+		/* get the next operator-group */
 		const std::string & oprt = *(obeg++);
-		if (!(context->has_operator(oprt))) continue;
+		const MutGroup & op_group = 
+			context.get_operator_group(oprt);
+		const std::set<MuCluster *> &
+			subsumings = op_group.get_subsumings();
 
-		/* add the subsuming mutants in */
-		const MutGroup & group = context->get_operator_group(oprt);
-		const std::set<MuCluster *> & subsumings = group.get_subsumings();
-		auto beg = subsumings.begin(), end = subsumings.end();
-
-		/* add one mutant in that operator to target */
-		while (beg != end) {
-			MuCluster & cluster = *(*(beg++));
-			const MutantSet & cmutants = cluster.get_mutants();
-			if (cmutants.number_of_mutants() > 0) {
-				Mutant::ID mid = find_mutant_of(cmutants);
-				mutants.add_mutant(mid);
-			}
-		}
+		/* add the subsuming clusters */
+		auto sbeg = subsumings.begin();
+		auto send = subsumings.end();
+		while (sbeg != send) 
+			requirements.insert(*(sbeg++));
 	}
+
+	/* TODO output requirements Op-S: for debug */  
+	std::cerr << "Select requirements: " << requirements.size() << "\n";
+
+	/* generate template */
+	std::vector<BitSeq *> templates; std::vector<unsigned> seeds;
+	this->select_minimal_template(requirements, templates, tests.get_space());
+
+	/* generate test seeds */
+	for (int i = 0; i < templates.size(); i++) 
+		seeds.push_back(1);
+
+	/* generate test suite */
+	this->generate_test_suite(templates, seeds, tests);
+
+	/* clear test templates */
+	for (int i = 0; i < templates.size(); i++)
+		delete templates[i];
+	seeds.clear(); templates.clear();
+
+	/* return */ return;
 }
-void TestMachine::generate(const MutantSet & mutants, TestSet & tests) {
-	/* validation */
-	if (context == nullptr) {
-		CError error(CErrorType::Runtime,
-			"TestMachine::generate",
-			"Invalid access to unopened machine");
-		CErrorConsumer::consume(error);
-		exit(CErrorType::Runtime);
-	}
-	else if (&(mutants.get_space()) != &(context->get_space())) {
-		CError error(CErrorType::InvalidArguments,
-			"TestMachine::generate",
-			"Inconsistent mutant space");
+void TestMachine::generate_test_suite(
+	const std::vector<BitSeq *> & templates,
+	const std::vector<unsigned> & seeds,
+	TestSet & tests) {
+	/* validation & initialization */
+	if (seeds.size() != templates.size()) {
+		CError error(CErrorType::InvalidArguments, 
+			"TestMachine::generate_test_suite", 
+			"Inconsistent inputs");
 		CErrorConsumer::consume(error);
 		exit(CErrorType::InvalidArguments);
 	}
 	else tests.clear();
 
-	/* get tests for each mutant */
-	MutantSpace & mspace = mutants.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		/* get next mutant in source */
-		if (mutants.has_mutant(mid)) {
-			/* get mutant cluster for the mutant  */
-			Mutant & mutant = mspace.get_mutant(mid);
-			const std::string & op = mutant.get_operator();
-			if (!(context->has_operator(op))) continue;
-			const MutGroup & group = context->get_operator_group(op);
-			if (!(group.get_mutants().has_mutant(mid))) continue;
-			MuCluster & cluster = group.get_cluster_of(mid);
+	/* insert test id into set */
+	for (int i = 0; i < seeds.size(); i++) {
+		unsigned int seed = seeds[i];
+		const BitSeq & ri = *(templates[i]);
+		TestCase::ID tid = this->find_test_at(ri, seed);
+		tests.add_test(tid);
+	}
 
-			/* get the score vector and the first test to kill it */
-			if (cluster.get_score_degree() == 0) continue;
-			const BitSeq & score_vector = cluster.get_score_vector();
-			TestCase::ID tid = find_test_in(score_vector);
-
-			/* add test in the target */ tests.add_test(tid);
+	/* return */ return;
+}
+TestCase::ID TestMachine::find_test_at(const BitSeq & bits, TestCase::ID seed) {
+	TestCase::ID k, n = bits.bit_number(); 
+	unsigned origin_seed = seed;
+	for (k = 0; k < n; k++) {
+		if (bits.get_bit(k) == BIT_1) {
+			if ((--seed) == 0)
+				return k;
 		}
 	}
 
-	/* end */ return;
-}
-double TestMachine::evaluate(const TestSet & tests) {
-	/* validation */
-	if (context == nullptr) {
-		CError error(CErrorType::Runtime,
-			"TestMachine::evaluate",
-			"Invalid access to unopened machine");
-		CErrorConsumer::consume(error);
-		exit(CErrorType::Runtime);
-	}
-	
-	/* get the global subsuming mutants */
-	const MutGroup & group = context->get_global_group();
-	const std::set<MuCluster *> & clusters = group.get_subsumings();
-	if (clusters.empty()) {
-		CError error(CErrorType::Runtime,
-			"TestMachine::evaluate",
-			"No subsuming mutants");
-		CErrorConsumer::consume(error);
-		exit(CErrorType::Runtime);
-	}
-
-	auto cbeg = clusters.begin(), cend = clusters.end();
-
-	/* count totals and killed */
-	int total = clusters.size(), kill = 0;
-	while (cbeg != cend) {
-		MuCluster & cluster = *(*(cbeg++));
-		if (kill_cluster(cluster, tests)) kill++;
-	}
-
-	/* return */ return ((double)kill) / ((double)total);
-}
-Mutant::ID TestMachine::find_mutant_of(const MutantSet & mutants) {
-	/* try to find the mutant id in the set */
-	MutantSpace & mspace = mutants.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		if (mutants.has_mutant(mid))
-			return mid;
-	}
-
 	/* not found */
-	CError error(CErrorType::InvalidArguments,
-		"TestMachine::find_mutant_of",
-		"No mutants in the source");
-	CErrorConsumer::consume(error);
-	exit(CErrorType::InvalidArguments);
+	CError error(CErrorType::InvalidArguments, "TestMachine::find_test_at", 
+		"Undefined index (" + std::to_string(origin_seed) + ")");
+	CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
 }
-TestCase::ID TestMachine::find_test_in(const BitSeq & bits) {
-	/* find the first test in given score set */
-	TestCase::ID tid, num = bits.bit_number();
-	for (tid = 0; tid < num; tid++) {
-		if (bits.get_bit(tid) == BIT_1)
-			return tid;
+void TestMachine::select_minimal_template(
+	const std::set<MuCluster *> & requirements,
+	std::vector<BitSeq *> & templates,
+	const TestSpace & test_space) {
+	/* clusters to be eliminated */ 
+	std::set<MuCluster *> ER, RS; templates.clear();
+	BitSeq bits1(test_space.number_of_tests());
+	BitSeq bits2(test_space.number_of_tests());
+
+	/* initialization */
+	auto beg = requirements.begin();
+	auto end = requirements.end();
+	while (beg != end) RS.insert(*(beg++));
+
+	/* compute template for each requirement */
+	while (!RS.empty()) {
+		/* cluster the next groups */
+		beg = RS.begin(), end = RS.end();
+		
+		/* initialize test suite */
+		MuCluster * next = *(beg++);
+		bits1.assign(next->get_score_vector());
+		bits2.assign(next->get_score_vector());
+
+		/* compute clusters with common tests (maximum) */
+		ER.insert(next);
+		while (beg != end) {
+			next = *(beg++); 
+			bits2.conjunct(next->get_score_vector());
+			if (!bits2.all_zeros()) {
+				ER.insert(next);
+				bits1.assign(bits2);
+			}
+			else {
+				bits2.assign(bits1);
+			}
+		}
+
+		/* add new test set */
+		BitSeq * seq = new BitSeq(bits1);
+		templates.push_back(seq);
+
+		/* eliminate ER */
+		beg = ER.begin(), end = ER.end();
+		while (beg != end) 
+			RS.erase(*(beg++));
 	}
 
-	/* not found */
-	CError error(CErrorType::InvalidArguments,
-		"TestMachine::find_test_in",
-		"No tests in the source");
-	CErrorConsumer::consume(error);
-	exit(CErrorType::InvalidArguments);
-}
-bool TestMachine::kill_cluster(const MuCluster & cluster, const TestSet & tests) {
-	BitSeq score_vector(cluster.get_score_vector());
-	const BitSeq test_vector = tests.get_set_vector();
-	if (score_vector.bit_number() != test_vector.bit_number()) {
-		CError error(CErrorType::InvalidArguments,
-			"TestMachine::kill_cluster",
-			"Inconsistent test space");
-		CErrorConsumer::consume(error);
-		exit(CErrorType::InvalidArguments);
-	}
-	else {
-		score_vector.conjunct(test_vector);
-		return !(score_vector.all_zeros());
-	}
+	/* return */ return;
 }
 
 /* load the tests and mutants into the project */
@@ -587,14 +616,41 @@ static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
 	}
 }
+/* generate sufficient operators for traditional selective mutations */
+static void selective_operators(std::set<std::string> & oprts) {
+	oprts.clear();
+
+	oprts.insert("u-SWDD");
+	oprts.insert("u-SMTC");
+	oprts.insert("u-SSDL");
+	oprts.insert("u-OLBN");
+	oprts.insert("u-OASN");
+	oprts.insert("u-ORRN");
+	oprts.insert("u-VTWD");
+	oprts.insert("u-VDTR");
+	oprts.insert("u-Cccr");
+	oprts.insert("u-Ccsr");
+}
+/* generate operators based on subsuming mutations */
+static void subsuming_operators(std::set<std::string> & oprts) {
+	oprts.clear();
+
+	oprts.insert("u-VDTR"); oprts.insert("u-VTWD");
+	oprts.insert("u-VLSR"); oprts.insert("u-VGSR");
+	oprts.insert("u-OAAN"); oprts.insert("u-OABN");
+	oprts.insert("u-OARN"); oprts.insert("u-ORAN");
+	oprts.insert("u-ORRN"); oprts.insert("u-ORSN");
+	oprts.insert("I-DirVarIncDec");
+	oprts.insert("I-IndVarIncDec");
+}
 
 /* test */
 
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "triangle";
-	TestType ttype = TestType::general;
+	std::string prname = "tot_info"; 
+	TestType ttype = TestType::tot_info;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -652,22 +708,15 @@ int main() {
 
 		// evaluation 
 		std::set<std::string> oprts;
-		oprts.insert("u-VDTR");
-		oprts.insert("u-OAAN");
-		oprts.insert("u-ORRN");
-		oprts.insert("u-OLLN");
-		oprts.insert("I-DirVarIncDec");
-		oprts.insert("I-IndVarIncDec");
-		oprts.insert("u-VTWD");
+		// selective_operators(oprts);
+		subsuming_operators(oprts);
 
 		MutantSet & smutants = *(mspace.create_set());
 		TestSet & stests = *(ctest.malloc_test_set());
-		TestMachine machine;
-		machine.start(data);
-		std::cout << "\nStart to evaluate...\n";
-		machine.select(oprts, smutants);
-		std::cout << "Select " << smutants.number_of_mutants() << " mutants...\n";
-		machine.generate(smutants, stests);
+		TestMachine machine(data);
+		machine.start(oprts);
+		std::cout << "\nStart to generate test...\n";
+		machine.generate(stests);
 		std::cout << "Select " << stests.size() << " tests from set...\n";
 		double score = machine.evaluate(stests);
 		std::cout << "Score is " << score * 100 << "%...\n";
