@@ -222,51 +222,80 @@ void MutOutputer::write(const MutLevel & data) {
 }
 void MutOutputer::write_summary(const MutLevel & data, std::ostream & out) {
 	/* declaration */
-	size_t M = 0, E = 0, OpS = 0, GS = 0, Op = 0, SOp = 0;
+	size_t M = 0, Eq = 0, MOP = 0, SOP = 0;
+	size_t MOP_S = 0, SOP_S = 0, G_S = 0;
+
 	MutantSpace & mspace = data.get_space();
+	Mutant::ID mid, num = mspace.number_of_mutants();
+	std::set<std::string> SOP_set; 
 	const MutGroup & group = data.get_global_group();
 
-	/* count global-subsuming mutant */
-	std::set<std::string> SOpSet;
-
-	/* iterate global-subsuming mutants */
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		Mutant & mutant = mspace.get_mutant(mid);
-		if (group.category_of(mid) == Subsuming_Category) {
-			SOpSet.insert(mutant.get_operator()); GS++;
-		}
-	}
-	SOp = SOpSet.size(); Op = data.get_operators().size();
-
-	/* iterate each operators */
-	auto beg = data.get_operators().begin();
-	auto end = data.get_operators().end();
+	/* iterate the mutants by operators applied */
+	const std::set<std::string> & OP_set = data.get_operators();
+	auto beg = OP_set.begin(), end = OP_set.end();
 	while (beg != end) {
-		/* get next operator-group */
+		/* get next operator and its mutants group */
 		const std::string & op = *(beg++);
-		if (SOpSet.count(op) == 0) continue;
 		const MutGroup & op_group = data.get_operator_group(op);
 
-		/* count total mutants */
+		/* counts total summary */
 		M += op_group.get_mutants().number_of_mutants();
+		if (op_group.get_equivalents() != nullptr)
+			Eq += ((op_group.get_equivalents())->size());
 
-		/* count equivalent */
-		if (op_group.get_equivalents() != nullptr) {
-			E += (*(op_group.get_equivalents())).size();
+		/* count MOP and MOP_S */
+		const std::set<MuCluster *> & clusters = op_group.get_subsumings();
+		auto cbeg = clusters.begin(), cend = clusters.end();
+		while (cbeg != cend) {
+			MuCluster & cluster = *(*(cbeg++));
+			MOP_S += cluster.size();
 		}
+		MOP = MOP + 1;
+	}
 
-		/* count op-subsuming */
-		OpS += op_group.get_subsumings().size();
+	/* iterate global subsuming mutants for SOP_set */
+	for (mid = 0; mid < num; mid++) {
+		if (group.category_of(mid) == Subsuming_Category) {
+			Mutant & mutant = mspace.get_mutant(mid);
+			SOP_set.insert(mutant.get_operator()); G_S++;
+		}
+	}
+
+	/* count SOP-subsuming mutants */
+	beg = SOP_set.begin(), end = SOP_set.end();
+	while (beg != end) {
+		const std::string & op = *(beg++);
+		const MutGroup & op_group = data.get_operator_group(op);
+
+		/* count SOP-subsuming mutants */
+		const std::set<MuCluster *> & clusters = op_group.get_subsumings();
+		auto cbeg = clusters.begin(), cend = clusters.end();
+		while (cbeg != cend) {
+			MuCluster & cluster = *(*(cbeg++));
+			SOP_S += cluster.size();
+		}
+		SOP = SOP + 1;
 	}
 
 	/* output */
-	out << "#Mutants: " << M << "\n";
-	out << "#Equivalent: " << E << "\n";
-	out << "#Op-Subsume: " << OpS << "\n";
-	out << "#Subsumings: " << GS << "\n";	/* op-subsuming for subsuming operators */
-	out << "#Operators: " << Op << "\n";
-	out << "\#Subsume-Ops: " << SOp << "\n";
+	out << "Total mutants: \t" << M << "\n";
+	out << "Equivalent set:\t" << Eq << "\n";
+	out << "Total operator:\t" << MOP << "\n";
+	out << "Subsuming ops: \t" << SOP << "\n";
+	out << "MOP-Subsumings:\t" << MOP_S << "\n";
+	out << "SOP-Subsumings:\t" << SOP_S << "\n";
+	out << "Glb-Subsumings:\t" << G_S << "\n";
+
+	out << "\nSubsuming Operators List:\n";
+	beg = SOP_set.begin(), end = SOP_set.end();
+	int count = 0;
+	while (beg != end) {
+		out << *(beg++) << "; ";
+		if(count++ == 4) {
+			count = 0; out << "\n";
+		}
+	}
+	out << "\n";
 
 	/* return */ out << std::endl; return;
 }
