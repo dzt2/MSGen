@@ -678,8 +678,8 @@ static void subsuming_operators(std::set<std::string> & oprts) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "tot_info"; 
-	TestType ttype = TestType::tot_info;
+	std::string prname = "schedule2"; 
+	TestType ttype = TestType::schedule2;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
