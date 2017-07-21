@@ -9,12 +9,13 @@
 */
 
 #include "mgraph.h"
+#include <stack>
 
 /* class declaration */
 class MutGroup;
 class MutLevel;
 class MutAnalyzer;
-class MutOutputer;
+class OperatorWriter;
 
 class TestMachine;
 
@@ -149,29 +150,87 @@ public:
 private:
 	MutLevel data;
 };
-/* outputter for subsuming mutations */
-class MutOutputer {
+
+/* algorithm to search the minimal subsuming operators for mutants */
+class SuOperatorSearch {
 public:
-	/* create outputter at specified directory */
-	MutOutputer(const File &);
+	/* create a searcher for identifying subsuming operator */
+	SuOperatorSearch(const MutLevel & data) 
+		: context(data), op_scs(), sc_ops(), _stack() {}
 	/* deconstructor */
-	~MutOutputer() {}
+	~SuOperatorSearch() { finish(); }
 
-	/* write ../analysis/mutants.txt, ../analysis/summary.txt ../analysis/ */
-	void write(const MutLevel &);
-
-protected:
-	/* [Mutants; Tests; Killed; Equivaence; Subsuming;] */
-	void write_summary(const MutLevel &, std::ostream &);
-	/* [mid, oprt, line, origin, replace, category-op, category] */
-	void write_mutants(const MutLevel &, std::ostream &);
-	/* [op, mutants, equivalence, op-subsuming, glb-subsuming] */
-	void write_distribution(const MutLevel &, std::ostream &);
+	/* initialize the searcher state */
+	void start();
+	/* identify the minimal subsuming operator by branch algorithm */
+	void solve(std::set<std::string> &);
+	/* clear the searcher state machine */
+	void finish();
 
 private:
-	File * dir;	/* ../analysis/ */
-	/* delete lines and \t from the string text */
-	void trim(std::string &);
+
+	/* type for state of search item */
+	typedef struct {
+		std::vector<std::string> op_state;	/* operator for selection */
+		std::set<MuCluster *> sc_state;		/* subsuming mutants used */
+		int cursor;			/* index to the next operator */
+		unsigned value;		/* evaluation hold by current state */
+	} _Item;
+
+	const MutLevel & context;		/* context of problem */
+	
+	std::map<std::string, std::set<MuCluster *> *> op_scs;	/* map from operator to its cover mutants */
+	std::map<MuCluster *, std::set<std::string> *> sc_ops;	/* map from mutant to its cover operators */
+	std::stack<_Item *> _stack;					/* stack for solution states */
+
+	/* get the cluster equals with source in SC */
+	MuCluster * belong_to(MuCluster *, const std::set<MuCluster *> &);
+	/* generate solution from stack items */
+	void gen_solution(std::set<std::string> &);
+
+	/* evaluate the value of operator */
+	unsigned eval(const std::string &);
+	/* evaluate operator by the size of generated mutants */
+	unsigned eval_mutants(const std::string & op);
+	/* evaluate operator by its number  */
+	unsigned eval_operats(const std::string & op);
+	/* evaluate operator by the size of op-subsuming mutants */
+	unsigned eval_smutant(const std::string & op);
+
+protected:
+	/* {op_scs.keys; sc_ops.keys; -1; 0;} */
+	void int_stat();
+	/* push the next item based on previous top item state and selected index */
+	void psh_stat();
+	/* pop the top item and delete its space */
+	void pop_stat();
+};
+/* writer to identify subsuming operators and compute the contributions */
+class OperatorWriter {
+public:
+	/* create writer for subsuming operators */
+	OperatorWriter() : dir(nullptr) {}
+	/* deconstructor */
+	~OperatorWriter() { close(); }
+
+	/* open ../analysis/ for writing results */
+	void open(const File &);
+	/* write summary.txt and distribution.txt */
+	void write(MutLevel &, const std::set<std::string> &);
+	/* close the writer */
+	void close();
+
+protected:
+	/* {Mut, Equiv, Oprt, SOp, SOp-Mut, SuM} */
+	void write_summary(MutLevel &, const std::set<std::string> &, std::ostream &);
+	/* {op, Mut, Equiv, SMut, Cop, Eop} */
+	void write_contribution(MutLevel &, std::ostream &);
+
+private:
+	/* ../analysis/ */
+	const File * dir;
+	/* whether cluster equals with one of the candidate */
+	MuCluster * belong_to(const MuCluster &, const std::set<MuCluster *> &);
 };
 
 /* machine for evaluating selective operators */

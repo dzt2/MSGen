@@ -192,262 +192,411 @@ bool MutLevel::valid_operator(const std::string & op) {
 	}
 }
 
-MutOutputer::MutOutputer(const File & root) {
+MuCluster * SuOperatorSearch::belong_to(
+	MuCluster * src, const std::set<MuCluster *> & SC) {
+	const BitSeq & x = src->get_score_vector();
+	auto beg = SC.begin(), end = SC.end();
+	while (beg != end) {
+		MuCluster & target = *(*(beg++));
+		const BitSeq & y = target.get_score_vector();
+		if (x.equals(y)) return &target;
+	}
+	return nullptr;
+}
+
+unsigned SuOperatorSearch::eval(const std::string & op) {
+	return eval_mutants(op);
+//	return eval_operats(op);
+//	return eval_smutant(op);
+}
+unsigned SuOperatorSearch::eval_mutants(const std::string & op) {
+	const MutGroup & group = context.get_operator_group(op);
+	return group.get_mutants().number_of_mutants();
+}
+unsigned SuOperatorSearch::eval_operats(const std::string & op) {
+	return 1;
+}
+unsigned SuOperatorSearch::eval_smutant(const std::string & op) {
+	const MutGroup & group = context.get_operator_group(op);
+	return group.get_subsumings().size();
+}
+void SuOperatorSearch::start() {
+	finish();	/* clear state space */
+
+	const MutGroup & group = context.get_global_group();
+	const std::set<MuCluster *> & scs = group.get_subsumings();
+
+	/* get two maps */
+	const std::set<std::string> & ops = context.get_operators();
+	auto obeg = ops.begin(), oend = ops.end();
+	while (obeg != oend) {
+		/* get the op-subsuming clusters */
+		const std::string & op = *(obeg++);
+		const MutGroup & op_group = context.get_operator_group(op);
+		const std::set<MuCluster *> & op_sm = op_group.get_subsumings();
+
+		/* build the items in two maps for this operator */
+		auto sbeg = op_sm.begin(), send = op_sm.end();
+		while (sbeg != send) {
+			/* get the subsuming cluster for the op-cluster */
+			MuCluster * src = *(sbeg++);
+			MuCluster * trg = belong_to(src, scs);
+
+			/* build maps */
+			if (trg != nullptr) {
+				/* build item space */
+				if (op_scs.count(op) == 0)
+					op_scs[op] = new std::set<MuCluster *>();
+				if (sc_ops.count(trg) == 0)
+					sc_ops[trg] = new std::set<std::string>();
+
+				/* update items */
+				auto iter1 = op_scs.find(op);
+				(iter1->second)->insert(trg);
+				auto iter2 = sc_ops.find(trg);
+				(iter2->second)->insert(op);
+			}
+		}	/* end two maps for operator */
+
+	}	/* end two maps for all operators */
+
+	/* validation */
+	auto sbeg = scs.begin(), send = scs.end();
+	while (sbeg != send) {
+		MuCluster * trg = *(sbeg++);
+		if (sc_ops.count(trg) == 0) {
+			CError error(CErrorType::Runtime, 
+				"SuOperatorSearch::start", 
+				"Incorrect context");
+			CErrorConsumer::consume(error);
+			exit(CErrorType::Runtime);
+		}
+	}	/* end validation */
+}
+void SuOperatorSearch::finish() {
+	while (!_stack.empty()) 
+		pop_stat();
+
+	auto obeg = op_scs.begin();
+	auto oend = op_scs.end();
+	while (obeg != oend) 
+		delete (obeg++)->second;
+	op_scs.clear();
+
+	auto sbeg = sc_ops.begin();
+	auto send = sc_ops.end();
+	while (sbeg != send)
+		delete (sbeg++)->second;
+	sc_ops.clear();
+}
+void SuOperatorSearch::solve(std::set<std::string> & SOP) {
+	/* initialize */ 
+	int_stat(); SOP.clear();
+
+	unsigned minvalue = context.get_space().number_of_mutants();
+	while (!_stack.empty()) {
+		_Item & top = *(_stack.top());	/* get the top item state */
+
+		/* valiate constraint of min-value */
+		if (top.value >= minvalue) {
+			pop_stat();
+		}
+		/* solution found and update SOP */
+		else if (top.sc_state.empty()) {
+			gen_solution(SOP);
+			minvalue = top.value;
+
+			// TODO debug
+			std::cerr << "Found(" << minvalue << "): \t{";
+			std::cerr << "SOP = " << SOP.size() << "; \t";
+			std::cerr << "STC = " << _stack.size() << "; ";
+			std::cerr << "}\n";
+
+			pop_stat();
+		}
+		/* iteration finished at this selected item */
+		else if (top.cursor >= top.op_state.size()) {	
+			pop_stat();
+		}
+		/* continue to the next item */
+		else {
+			psh_stat(); top.cursor = top.cursor + 1;
+		}
+	} /* end while: stack solving */
+
+	/* return */ return;
+}
+void SuOperatorSearch::int_stat() {
+	/* clear and initialize state */
+	while (!_stack.empty()) pop_stat();
+	_Item * item = new _Item();
+	
+
+	/* for operator-candidates */
+	auto obeg = op_scs.begin();
+	auto oend = op_scs.end();
+	while (obeg != oend) {
+		const std::string & op = (obeg++)->first;
+		item->op_state.push_back(op);
+	}
+	/* for subsuming mutants state */
+	auto sbeg = sc_ops.begin();
+	auto send = sc_ops.end();
+	while (sbeg != send) {
+		MuCluster * trg = (sbeg++)->first;
+		item->sc_state.insert(trg);
+	}
+	/* initialize cursor to the next level */
+	item->cursor = 0; item->value = 0;
+
+	/* push & return */ _stack.push(item);
+}
+void SuOperatorSearch::pop_stat() {
+	if (_stack.empty()) {
+		CError error(CErrorType::Runtime, 
+			"SuOperatorSearch::pop_stat", 
+			"Incorrect access: empty state");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else {
+		delete _stack.top();
+		_stack.pop();
+	}
+}
+void SuOperatorSearch::psh_stat() {
+	if (_stack.empty()) {
+		CError error(CErrorType::Runtime,
+			"SuOperatorSearch::psh_stat",
+			"Incorrect access: empty state");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else {
+		/* get next operator to be selected */
+		_Item & item = *(_stack.top());
+		const std::string & op 
+			= item.op_state[item.cursor];
+
+		/* create new item */
+		_Item & next = *(new _Item());
+
+		/* compute subsuming clusters state */
+		const std::set<MuCluster *> & origin = item.sc_state;
+		auto op_iter = op_scs.find(op);
+		std::set<MuCluster *> & reduce = *(op_iter->second);
+		auto org_beg = origin.begin(), org_end = origin.end();
+		while (org_beg != org_end) {
+			MuCluster * trg = *(org_beg++);
+			if (reduce.count(trg) == 0)
+				next.sc_state.insert(trg);
+		}
+
+		/* compute the sufficient operators */
+		std::set<std::string> sufficientOP;
+		auto sub_beg = next.sc_state.begin();
+		auto sub_end = next.sc_state.end();
+		while (sub_beg != sub_end) {
+			auto iter = sc_ops.find(*(sub_beg++));
+			const std::set<std::string> & ops = *(iter->second);
+			auto beg = ops.begin(), end = ops.end();
+			while (beg != end) 
+				sufficientOP.insert(*(beg++));
+		}
+
+		/* compute the operator candidates */
+		for (int i = item.cursor + 1; 
+			i < item.op_state.size(); i++) {
+			const std::string & cop = item.op_state[i];
+			if (sufficientOP.count(cop) > 0)
+				next.op_state.push_back(cop);
+		}
+
+		/* compute value */
+		next.value = item.value + eval(op);
+
+		/* initialize cursor */ next.cursor = 0;
+
+		/* push at last */ _stack.push(&next);
+	}
+}
+void SuOperatorSearch::gen_solution(std::set<std::string> & SOP) {
+	/* declarations */
+	SOP.clear(); std::stack<_Item *> items;
+
+	/* compute the operators */
+	while (!_stack.empty()) {
+		_Item & item = *(_stack.top());
+		int key = item.cursor - 1;
+		if (key >= 0) 
+			SOP.insert(item.op_state[key]);
+		_stack.pop(); items.push(&item);
+	}
+
+	/* recover the stack */
+	while (!items.empty()) {
+		_Item * item = items.top();
+		items.pop(); _stack.push(item);
+	}
+}
+
+void OperatorWriter::open(const File & root) {
+	close();	/* close the original stream */
+
+	/* get the ../analysis directory */
+	this->dir = nullptr;
 	const std::vector<File *> & files = root.list_files();
-	auto beg = files.begin(), end = files.end(); dir = nullptr;
-	while(beg != end) {
-		File & file = *(*(beg++));
+	for (int i = 0; i < files.size(); i++) {
+		File & file = *(files[i]);
 		if (file.get_local_name() == "analysis") {
-			dir = &file;
+			dir = &file; break;
 		}
 	}
 
+	/* analysis dir is not found */
 	if (dir == nullptr) {
 		CError error(CErrorType::InvalidArguments, 
-			"MutOutputer::MutOutputer", 
-			"Undefined: ../analysis/");
-		CErrorConsumer::consume(error);
+			"OperatorWriter::open", 
+			"path ../analysis is not found");
+		CErrorConsumer::consume(error); 
 		exit(CErrorType::InvalidArguments);
 	}
 }
-void MutOutputer::write(const MutLevel & data) {
-	std::ofstream out1(dir->get_path() + "/summary.txt");
-	write_summary(data, out1); out1.close();
-
-	std::ofstream out2(dir->get_path() + "/mutants.txt");
-	write_mutants(data, out2); out2.close();
-
-	std::ofstream out3(dir->get_path() + "/distribution.txt");
-	write_distribution(data, out3); out3.close();
+void OperatorWriter::close() {
+	dir = nullptr; 
 }
-void MutOutputer::write_summary(const MutLevel & data, std::ostream & out) {
-	/* declaration */
-	size_t M = 0, Eq = 0, MOP = 0, SOP = 0;
-	size_t MOP_S = 0, SOP_S = 0, G_S = 0;
+void OperatorWriter::write(MutLevel & data, const std::set<std::string> & SOP) {
+	if (dir == nullptr) {
+		CError error(CErrorType::Runtime,
+			"OperatorWriter::write", 
+			"writer is not opened");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	
+	std::ofstream out1(dir->get_path() + "/summary.txt");
+	this->write_summary(data, SOP, out1); out1.close();
+	std::ofstream out2(dir->get_path() + "/contribution.txt");
+	this->write_contribution(data, out2); out2.close();
 
-	MutantSpace & mspace = data.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	std::set<std::string> SOP_set; 
-	const MutGroup & group = data.get_global_group();
+	/* return */ return;
+}
+void OperatorWriter::write_summary(
+	MutLevel & data, const std::set<std::string> & SOP, std::ostream & out) {
+	/* declarations */
+	size_t M = 0, E = 0, S = 0, O = 0, SO = 0, SM = 0, SE = 0, SSM = 0;
 
-	/* iterate the mutants by operators applied */
-	const std::set<std::string> & OP_set = data.get_operators();
-	auto beg = OP_set.begin(), end = OP_set.end();
+	/* operators applied */
+	const std::set<std::string> & oprts = data.get_operators();
+	auto beg = oprts.begin(), end = oprts.end();
 	while (beg != end) {
-		/* get next operator and its mutants group */
-		const std::string & op = *(beg++);
-		const MutGroup & op_group = data.get_operator_group(op);
-
-		/* counts total summary */
+		const std::string & oprt = *(beg++);
+		const MutGroup & op_group = data.get_operator_group(oprt);
 		M += op_group.get_mutants().number_of_mutants();
 		if (op_group.get_equivalents() != nullptr)
-			Eq += ((op_group.get_equivalents())->size());
-
-		/* count MOP and MOP_S */
-		const std::set<MuCluster *> & clusters = op_group.get_subsumings();
-		auto cbeg = clusters.begin(), cend = clusters.end();
-		while (cbeg != cend) {
-			MuCluster & cluster = *(*(cbeg++));
-			MOP_S += cluster.size();
-		}
-		MOP = MOP + 1;
+			E += op_group.get_equivalents()->size();
 	}
 
-	/* iterate global subsuming mutants for SOP_set */
-	for (mid = 0; mid < num; mid++) {
-		if (group.category_of(mid) == Subsuming_Category) {
-			Mutant & mutant = mspace.get_mutant(mid);
-			SOP_set.insert(mutant.get_operator()); G_S++;
-		}
+	/* subsuming set */
+	const MutGroup & group = data.get_global_group();
+	S = group.get_subsumings().size();
+
+	/* operator-subsuming operator */
+	O = oprts.size(); SO = SOP.size();
+
+	/* mutants in subsuming operators */
+	auto sbeg = SOP.begin(), send = SOP.end();
+	while (sbeg != send) {
+		const MutGroup & op_group = data.get_operator_group(*(sbeg++));
+		SM += op_group.get_mutants().number_of_mutants();
+		if (op_group.get_equivalents() != nullptr)
+			SE += op_group.get_equivalents()->size();
+		SSM += op_group.get_subsumings().size();
 	}
 
-	/* count SOP-subsuming mutants */
-	beg = SOP_set.begin(), end = SOP_set.end();
-	while (beg != end) {
-		const std::string & op = *(beg++);
-		const MutGroup & op_group = data.get_operator_group(op);
+	/* numbers output */
+	out << "Mutants: \t" << M << "\n";
+	out << "Equival: \t" << E << "\n";
+	out << "SuMutat: \t" << S << "\n";
+	out << "Operatr: \t" << O << "\n";
+	out << "SubOprt: \t" << SO << "\n";
+	out << "SOpMutt: \t" << SM << "\n";
+	out << "SOpEquv: \t" << SE << "\n";
+	out << "SOpSubM: \t" << SSM << "\n";
 
-		/* count SOP-subsuming mutants */
-		const std::set<MuCluster *> & clusters = op_group.get_subsumings();
-		auto cbeg = clusters.begin(), cend = clusters.end();
-		while (cbeg != cend) {
-			MuCluster & cluster = *(*(cbeg++));
-			SOP_S += cluster.size();
-		}
-		SOP = SOP + 1;
-	}
-
-	/* output */
-	out << "Total mutants: \t" << M << "\n";
-	out << "Equivalent set:\t" << Eq << "\n";
-	out << "Total operator:\t" << MOP << "\n";
-	out << "Subsuming ops: \t" << SOP << "\n";
-	out << "MOP-Subsumings:\t" << MOP_S << "\n";
-	out << "SOP-Subsumings:\t" << SOP_S << "\n";
-	out << "Glb-Subsumings:\t" << G_S << "\n";
-
-	out << "\nSubsuming Operators List:\n";
-	beg = SOP_set.begin(), end = SOP_set.end();
-	int count = 0;
-	while (beg != end) {
-		out << *(beg++) << "; ";
-		if(count++ == 4) {
-			count = 0; out << "\n";
+	/* subsuming operator print */
+	int count = 0; out << "\n";
+	sbeg = SOP.begin(), send = SOP.end();
+	while (sbeg != send) {
+		const std::string & op = *(sbeg++);
+		out << op << "; ";
+		if (++count == 5) {
+			out << "\n"; count = 0;
 		}
 	}
 	out << "\n";
 
 	/* return */ out << std::endl; return;
 }
-void MutOutputer::write_mutants(const MutLevel & data, std::ostream & out) {
+void OperatorWriter::write_contribution(
+	MutLevel & data, std::ostream & out) {
 	/* declarations */
-	MutantSpace & mspace = data.get_space();
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	const MutGroup & global_group = data.get_global_group();
-	const TextBuild & text = *(mspace.get_code_file().get_text());
+	const MutGroup & group = data.get_global_group();
+	const std::set<MuCluster *> & Su = group.get_subsumings();
+	const std::set<std::string> & ops = data.get_operators();
+	size_t SuNum = Su.size();
 
 	/* title */
-	out << "mid\tline\torigin\treplace\toperator\tmode\top_cluster\top_category\tcluster\tcategory\n";
+	out << "Operator\tMutants\tEquiv\tNumber\tCop\tEop\n";
 
-	/* output each mutant and their elements */
-	for (mid = 0; mid < num; mid++) {
-		/* get next mutant of valid operator */
-		Mutant & mutant = mspace.get_mutant(mid);
-		const std::string & oprt = mutant.get_operator();
-		if (!data.has_operator(oprt)) continue;
+	auto beg = ops.begin(), end = ops.end();
+	while (beg != end) {
+		/* get next operator */
+		const std::string & op = *(beg++);
+		const MutGroup & op_group = data.get_operator_group(op);
+		const std::set<MuCluster *> & opSu = op_group.get_subsumings();
 
-		/* get the valid mutant in data space */
-		const MutGroup & group = data.get_operator_group(oprt);
-		if (!group.get_mutants().has_mutant(mid)) continue;
-		
-		/* basic information */
-		const Mutation & mutation = mutant.get_mutation(mutant.get_orders() - 1);
-		const CodeLocation & location = mutation.get_location();
-		std::string origin = location.get_text_at();
-		std::string replace = mutation.get_replacement();
-		trim(origin); trim(replace);
-		out << mutant.get_id() << "\t";
-		out << text.lineOfIndex(location.get_bias()) << "\t";
-		out << origin << "\t" << replace << "\t";
+		/* Mut, Eq, Ct, Ef, Num */
+		size_t Mut = op_group.get_mutants().number_of_mutants();
+		size_t Eqv = 0;
+		if (op_group.get_equivalents() != nullptr)
+			Eqv = op_group.get_equivalents()->size();
 
-		/* operator mode */
-		out << oprt << "\t" << "???" << "\t";
-
-		/* operator category */
-		MuCluster & op_cluster = group.get_cluster_of(mid);
-		out << op_cluster.get_id() << "\t";
-		switch (group.category_of(mid)) {
-		case Equvalent_Category:
-			out << "equivalent"; break;
-		case Subsuming_Category:
-			out << "subsuming"; break;
-		case Subsumed_Category:
-			out << "subsumed"; break;
-		default:
-			out << ""; break;
-		}
-		out << "\t";
-
-		/* global test */
-		if (global_group.get_mutants().has_mutant(mid)) {
-			MuCluster & global_cluster 
-				= global_group.get_cluster_of(mid);
-			out << global_cluster.get_id() << "\t";
-
-			switch (global_group.category_of(mid)) {
-			case Equvalent_Category:
-				out << "equivalent"; break;
-			case Subsuming_Category:
-				out << "subsuming"; break;
-			case Subsumed_Category:
-				out << "subsumed"; break;
-			default:
-				out << ""; break;
-			}
+		/* count the contribution */
+		size_t Num = 0;
+		auto obeg = opSu.begin(), oend = opSu.end();
+		while (obeg != oend) {
+			const MuCluster & cluster = *(*(obeg++));
+			if (belong_to(cluster, Su) != nullptr)
+				Num++;
 		}
 
-		out << "\n";	/* next line */
-	} /* end for */
+		/* Ct, Ef */
+		double Ct, Ef = 0.0;
+		Ct = ((double)Num) / ((double)SuNum);
+		if(Mut - Eqv != 0)
+			Ef = ((double)Num) / ((double)(Mut - Eqv));
 
-	/* end */
+		/* print line */
+		out << op << "\t";
+		out << Mut << "\t";
+		out << Eqv << "\t";
+		out << Num << "\t";
+		out << Ct << "\t";
+		out << Ef << "\n";
+	}
+
 	out << std::endl; return;
 }
-void MutOutputer::write_distribution(const MutLevel & data, std::ostream & out) {
-	/* count global-subsuming for each operator */
-	const MutGroup & group = data.get_global_group();
-	std::map<std::string, size_t> op_subsumings;
-	MutantSpace & mspace = data.get_space(); size_t GS = 0;
-	Mutant::ID mid, num = mspace.number_of_mutants();
-	for (mid = 0; mid < num; mid++) {
-		if (group.category_of(mid) == Subsuming_Category) {
-			Mutant & mutant = mspace.get_mutant(mid);
-			const std::string & op = mutant.get_operator();
-			if (op_subsumings.count(op) == 0)
-				op_subsumings[op] = 0;
-
-			auto iter = op_subsumings.find(op);
-			size_t count = iter->second; GS++;
-			op_subsumings[op] = count + 1;
-		}
+MuCluster * OperatorWriter::belong_to(const MuCluster & cluster, const std::set<MuCluster *> & ops) {
+	const BitSeq & x = cluster.get_score_vector();
+	auto beg = ops.begin(), end = ops.end();
+	while (beg != end) {
+		MuCluster & target = *(*(beg++));
+		const BitSeq & y = target.get_score_vector();
+		if (x.equals(y)) return &target;
 	}
-
-	/* print title */
-	out << "Op\t#Mut\tEquiv\tOp-Su\tG-Su\tEfficiency\tContribution\n";
-	const std::set<std::string> & operators = data.get_operators();
-	
-	/* print lines */
-	auto obeg = operators.begin(), oend = operators.end();
-	while (obeg != oend) {
-		/* get next operator group */
-		const std::string & op = *(obeg++);
-		const MutGroup & op_group = data.get_operator_group(op);
-
-		/* #Mut */
-		size_t M = op_group.get_mutants().number_of_mutants();
-
-		/* #Equiv */
-		size_t E = 0;
-		if (op_group.get_equivalents() != nullptr)
-			E = op_group.get_equivalents()->size();
-
-		/* #Op-Su */
-		size_t OpS = op_group.get_subsumings().size();
-
-		/* #G-Su */
-		size_t GSu = 0;
-		if (op_subsumings.count(op) > 0) {
-			auto iter = op_subsumings.find(op);
-			GSu = iter->second;
-		}
-
-		/* efficiency */
-		double eff = ((double)GSu) / ((double)OpS);
-		double ctr = ((double)GSu) / GS;
-
-		/* output */
-		out << op << "\t";
-		out << M << "\t";
-		out << E << "\t";
-		out << OpS << "\t";
-		out << GSu << "\t";
-		out << eff << "\t";
-		out << ctr << "\n";
-	}
-	op_subsumings.clear();
-
-	/* return */ out << std::endl; return;
-}
-void MutOutputer::trim(std::string & str) {
-	std::string bak; char ch;
-	int i = 0, n = str.length();
-	while (i < n) {
-		ch = str[i++];
-
-		if (ch == '\n') bak += " ";
-		else if (ch == '\t') bak += " ";
-		else bak += ch;
-	}
-	str = bak;
+	return nullptr;
 }
 
 void TestMachine::start(const std::set<std::string> & ops) {
@@ -674,12 +823,11 @@ static void subsuming_operators(std::set<std::string> & oprts) {
 }
 
 /* test */
-
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "schedule2"; 
-	TestType ttype = TestType::schedule2;
+	std::string prname = "schedule"; 
+	TestType ttype = TestType::schedule;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -696,7 +844,7 @@ int main() {
 		CError error(CErrorType::Runtime, "main()", "./analysis is undefined");
 		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
 	}
-
+	 
 	// create code-project, mutant-project, test-project
 	CProgram & program = *(new CProgram(root));
 	CTest & ctest = *(new CTest(ttype, root, program.get_exec()));
@@ -730,25 +878,33 @@ int main() {
 		MutLevel & data = analyzer.get_data();
 		std::cout << "Compute subsuming mutants: finished\n";
 
+		// solve subsuming operators
+		std::set<std::string> SOP;
+		SuOperatorSearch search(data);
+		search.start(); search.solve(SOP); search.finish();
+		std::cout << "Solving subsuming operators: " << SOP.size() << "\n";
+
 		// end output
-		MutOutputer outputer(root);
-		outputer.write(data);
+		OperatorWriter writer;
+		writer.open(root);
+		writer.write(data, SOP);
+		writer.close();
 		std::cout << "Output subsuming mutants: finished\n";
 
 		// evaluation 
-		std::set<std::string> oprts;
-		// selective_operators(oprts);
-		subsuming_operators(oprts);
-
-		MutantSet & smutants = *(mspace.create_set());
-		TestSet & stests = *(ctest.malloc_test_set());
-		TestMachine machine(data);
-		machine.start(oprts);
-		std::cout << "\nStart to generate test...\n";
-		machine.generate(stests);
-		std::cout << "Select " << stests.size() << " tests from set...\n";
-		double score = machine.evaluate(stests);
-		std::cout << "Score is " << score * 100 << "%...\n";
+//		std::set<std::string> oprts;
+//		selective_operators(oprts);
+//		subsuming_operators(oprts);
+//
+//		MutantSet & smutants = *(mspace.create_set());
+//		TestSet & stests = *(ctest.malloc_test_set());
+//		TestMachine machine(data);
+//		machine.start(oprts);
+//		std::cout << "\nStart to generate test...\n";
+//		machine.generate(stests);
+//		std::cout << "Select " << stests.size() << " tests from set...\n";
+//		double score = machine.evaluate(stests);
+//		std::cout << "Score is " << score * 100 << "%...\n";
 
 	}
 
