@@ -162,8 +162,10 @@ public:
 
 	/* initialize the searcher state */
 	void start();
-	/* identify the minimal subsuming operator by branch algorithm */
+	/* identify the minimal subsuming operator by inserting new candidate */
 	void solve(std::set<std::string> &);
+	/* identify the minimal subsuming operator by eliminating candidates */
+	void re_solve(std::set<std::string> &);
 	/* clear the searcher state machine */
 	void finish();
 
@@ -187,6 +189,8 @@ private:
 	MuCluster * belong_to(MuCluster *, const std::set<MuCluster *> &);
 	/* generate solution from stack items */
 	void gen_solution(std::set<std::string> &);
+	/* generate solution for re-solve stack items */
+	void gen_re_solution(std::set<std::string> &);
 
 	/* evaluate the value of operator */
 	unsigned eval(const std::string &);
@@ -198,10 +202,12 @@ private:
 	unsigned eval_smutant(const std::string & op);
 
 protected:
-	/* {op_scs.keys; sc_ops.keys; -1; 0;} */
+	/* {op_scs.keys; sc_ops.keys; 0; 0;} */
 	void int_stat();
-	/* push the next item based on previous top item state and selected index */
+	/* push the next item based on previous top item by selecting specified item */
 	void psh_stat();
+	/* push the next item based on previous top item by eliminate specified item */
+	void rpsh_stat();
 	/* pop the top item and delete its space */
 	void pop_stat();
 };

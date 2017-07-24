@@ -324,13 +324,58 @@ void SuOperatorSearch::solve(std::set<std::string> & SOP) {
 		}
 	} /* end while: stack solving */
 
-	/* return */ return;
+	  /* validate solution */
+	if (SOP.empty()) {
+		CError error(CErrorType::Runtime,
+			"SuOperatorSearch::solve",
+			"Solution is not found");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else return;
+}
+void SuOperatorSearch::re_solve(std::set<std::string> & SOP) {
+	/* initialize */
+	int_stat(); SOP.clear(); 
+	size_t constrain = sc_ops.size();	/* number of remaining clusters */
+	unsigned maxvalue = 0;	/* how many mutants are reduced */
+
+	while (!_stack.empty()) {
+		_Item & top = *(_stack.top());	/* get the top item state */
+
+		/* validate constrain */
+		if (top.sc_state.size() < constrain) {
+			pop_stat();
+		}
+		/* validate a solution */
+		else if (top.cursor >= top.op_state.size()) {
+			if (top.value >= maxvalue) {
+				maxvalue = top.value;
+				gen_re_solution(SOP);
+			}
+			pop_stat();
+		}
+		/* further search child space */
+		else {
+			rpsh_stat(); top.cursor = top.cursor + 1;
+		}
+	} /* end while stack */
+	
+	/* validate solution */
+	if (SOP.empty()) {
+		CError error(CErrorType::Runtime, 
+			"SuOperatorSearch::re_solve", 
+			"Solution is not found");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else return;
+
 }
 void SuOperatorSearch::int_stat() {
 	/* clear and initialize state */
 	while (!_stack.empty()) pop_stat();
 	_Item * item = new _Item();
-	
 
 	/* for operator-candidates */
 	auto obeg = op_scs.begin();
@@ -420,6 +465,47 @@ void SuOperatorSearch::psh_stat() {
 		/* push at last */ _stack.push(&next);
 	}
 }
+void SuOperatorSearch::rpsh_stat() {
+	if (_stack.empty()) {
+		CError error(CErrorType::Runtime,
+			"SuOperatorSearch::rpsh_stat",
+			"Incorrect access: empty state");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else {
+		/* get next operator to be selected */
+		_Item & parent = *(_stack.top());
+
+		/* create new item into stack */
+		_Item & child = *(new _Item());
+
+		/* compute operator and clusters */
+		for (int i = 0; i < parent.op_state.size(); i++) {
+			if (i != parent.cursor) {
+				/* insert next operator from parent */
+				const std::string & op = parent.op_state[i];
+				child.op_state.push_back(op);
+
+				/* update subsuming clusters */
+				auto iter = op_scs.find(op);
+				const std::set<MuCluster *> & clusters = *(iter->second);
+				auto beg = clusters.begin(), end = clusters.end();
+				while (beg != end) 
+					child.sc_state.insert(*(beg++));
+			}
+		} /* end for op-sc */
+
+		/* to ignore previous used operator */
+		child.cursor = parent.cursor;
+
+		/* compute value */
+		const std::string & rop = parent.op_state[parent.cursor];
+		child.value = parent.value + eval(rop);
+
+		/* push in last */ _stack.push(&child);
+	}
+}
 void SuOperatorSearch::gen_solution(std::set<std::string> & SOP) {
 	/* declarations */
 	SOP.clear(); std::stack<_Item *> items;
@@ -438,6 +524,11 @@ void SuOperatorSearch::gen_solution(std::set<std::string> & SOP) {
 		_Item * item = items.top();
 		items.pop(); _stack.push(item);
 	}
+}
+void SuOperatorSearch::gen_re_solution(std::set<std::string> & SOP) {
+	SOP.clear(); _Item & top = *(_stack.top());
+	for (int i = 0; i < top.op_state.size(); i++) 
+		SOP.insert(top.op_state[i]);
 }
 
 void OperatorWriter::open(const File & root) {
@@ -826,8 +917,8 @@ static void subsuming_operators(std::set<std::string> & oprts) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "schedule"; 
-	TestType ttype = TestType::schedule;
+	std::string prname = "Day"; 
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -881,7 +972,10 @@ int main() {
 		// solve subsuming operators
 		std::set<std::string> SOP;
 		SuOperatorSearch search(data);
-		search.start(); search.solve(SOP); search.finish();
+		search.start(); 
+		search.solve(SOP); 
+		// search.re_solve(SOP);
+		search.finish();
 		std::cout << "Solving subsuming operators: " << SOP.size() << "\n";
 
 		// end output
