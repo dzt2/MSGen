@@ -372,6 +372,94 @@ void SuOperatorSearch::re_solve(std::set<std::string> & SOP) {
 	else return;
 
 }
+void SuOperatorSearch::gr_solve(std::set<std::string> & SOP) {
+	/* initialization */
+	int_stat(); SOP.clear();
+	_Item & root = *(_stack.top());
+	root.op_state.clear();
+
+	/* update root item */
+	MuCluster * first = *(root.sc_state.begin());
+	auto first_iter = sc_ops.find(first);
+	std::set<std::string> & first_ops = *(first_iter->second);
+	auto first_beg = first_ops.begin();
+	auto first_end = first_ops.end();
+	while (first_beg != first_end) 
+		root.op_state.push_back(*(first_beg++));
+
+	/* compute the best solution */
+	unsigned minvalue = context.get_space().number_of_mutants();
+	while (!_stack.empty()) {
+		_Item & top = *(_stack.top());	/* get the top item state */
+
+		if (top.value >= minvalue) {	/* violate limit */
+			this->pop_stat();
+		}
+		else if (top.sc_state.empty()) {	/* find feasible solution */
+			minvalue = top.value;
+			this->pop_stat();
+			this->gen_solution(SOP);
+		}
+		else if (top.cursor >= top.op_state.size()) {	/* out of range */
+			this->pop_stat();
+		}
+		else {	/* construction solution further */
+			gpsh_stat(); top.cursor = top.cursor + 1;
+		}
+
+	} /* end while solution */
+
+	/* validate solution */
+	if (SOP.empty()) {
+		CError error(CErrorType::Runtime,
+			"SuOperatorSearch::gr_solve",
+			"Solution is not found");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else return;
+}
+void SuOperatorSearch::suf_solve(const std::set<std::string> & init,
+	std::set<std::string> & SufSOP, double alpha) {
+	/* initialization */
+	SufSOP.clear(); init_stat(init);
+	size_t limit = sc_ops.size() * alpha;
+	unsigned maxvalue = 0;
+
+	while (!_stack.empty()) {
+		/* get next item from stack */
+		_Item & item = *(_stack.top());
+
+		/* valiate constraint */
+		if (item.sc_state.size() < limit) {
+			pop_stat();
+		}
+		/* reach the end of the children */
+		else if (item.cursor >= item.op_state.size()) {
+			/* find better solution */
+			if (item.value >= maxvalue) {
+				maxvalue = item.value;
+				gen_re_solution(SufSOP);
+			}
+			pop_stat();	/* roll back */
+		}
+		/* otherwise, search further */
+		else {
+			rpsh_stat(); item.cursor = item.cursor + 1;
+		}
+
+	} /* end while : stack solution */
+
+	  /* validate solution */
+	if (SufSOP.empty()) {
+		CError error(CErrorType::Runtime,
+			"SuOperatorSearch::suf_solve",
+			"Solution is not found");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else return;
+}
 void SuOperatorSearch::int_stat() {
 	/* clear and initialize state */
 	while (!_stack.empty()) pop_stat();
@@ -390,6 +478,38 @@ void SuOperatorSearch::int_stat() {
 	while (sbeg != send) {
 		MuCluster * trg = (sbeg++)->first;
 		item->sc_state.insert(trg);
+	}
+	/* initialize cursor to the next level */
+	item->cursor = 0; item->value = 0;
+
+	/* push & return */ _stack.push(item);
+}
+void SuOperatorSearch::init_stat(const std::set<std::string> & init) {
+	/* clear and initialize state */
+	while (!_stack.empty()) pop_stat();
+	_Item * item = new _Item();
+
+	/* for operator-candidates */
+	auto obeg = init.begin(), oend = init.end();
+	while (obeg != oend) {
+		const std::string & op = *(obeg++);
+		if (op_scs.count(op) == 0)
+			continue;
+		else
+			item->op_state.push_back(op);
+	}
+	/* compute covered clusters */
+	for (int i = 0; i < item->op_state.size(); i++) {
+		const std::string & op = item->op_state[i];
+		if (op_scs.count(op) > 0) {
+			auto op_iter = op_scs.find(op);
+			const std::set<MuCluster *> & scs = *(op_iter->second);
+			auto scs_beg = scs.begin(), scs_end = scs.end();
+			while (scs_beg != scs_end) {
+				MuCluster * covelm = *(scs_beg++);
+				item->sc_state.insert(covelm);
+			}
+		}
 	}
 	/* initialize cursor to the next level */
 	item->cursor = 0; item->value = 0;
@@ -506,6 +626,60 @@ void SuOperatorSearch::rpsh_stat() {
 		/* push in last */ _stack.push(&child);
 	}
 }
+void SuOperatorSearch::gpsh_stat() {
+	if (_stack.empty()) {
+		CError error(CErrorType::Runtime,
+			"SuOperatorSearch::rpsh_stat",
+			"Incorrect access: empty state");
+		CErrorConsumer::consume(error);
+		exit(CErrorType::Runtime);
+	}
+	else {
+		/* get next operator to be selected */
+		_Item & parent = *(_stack.top());
+
+		/* create the next item to be pushed */
+		_Item & child = *(new _Item());
+
+		/* get the selected operator */
+		if (parent.cursor >= parent.op_state.size()) {
+			CError error(CErrorType::OutOfIndex,
+				"SuOperator::gpsh_stat()",
+				"Out of limit for parent.op_stat");
+			CErrorConsumer::consume(error);
+			exit(CErrorType::OutOfIndex);
+		}
+		const std::string & op = parent.op_state[parent.cursor];
+
+		/* compute subsuming clusters */
+		auto op_iter = op_scs.find(op); child.sc_state.clear();
+		const std::set<MuCluster *> & reduced = *(op_iter->second);
+		auto sc_beg = parent.sc_state.begin();
+		auto sc_end = parent.sc_state.end();
+		while (sc_beg != sc_end) {
+			MuCluster * cluster = *(sc_beg++);
+			if (reduced.count(cluster) == 0)
+				child.sc_state.insert(cluster);
+		}
+
+		/* compute operators */
+		if (!child.sc_state.empty()) {
+			auto next_iter = child.sc_state.begin();
+			MuCluster * first = *(next_iter);
+			auto first_iter = sc_ops.find(first); child.op_state.clear();
+			const std::set<std::string> & first_ops = *(first_iter->second);
+			auto first_beg = first_ops.begin(), first_end = first_ops.end();
+			while (first_beg != first_end) 
+				child.op_state.push_back(*(first_beg++));
+		}
+
+		/* compute cursor and value */
+		child.value = parent.value + eval(op);
+		child.cursor = 0;
+
+		/* push child */ _stack.push(&child);
+	}
+}
 void SuOperatorSearch::gen_solution(std::set<std::string> & SOP) {
 	/* declarations */
 	SOP.clear(); std::stack<_Item *> items;
@@ -529,6 +703,43 @@ void SuOperatorSearch::gen_re_solution(std::set<std::string> & SOP) {
 	SOP.clear(); _Item & top = *(_stack.top());
 	for (int i = 0; i < top.op_state.size(); i++) 
 		SOP.insert(top.op_state[i]);
+}
+void SuOperatorSearch::gen_coverset(const std::set<std::string> & ops, std::set<MuCluster *> & clusters) {
+	clusters.clear();
+
+	auto op_beg = ops.begin(), op_end = ops.end();
+	while (op_beg != op_end) {
+		const std::string & op = *(op_beg++);
+		if (op_scs.count(op) > 0) {
+			auto op_iter = op_scs.find(op);
+			const std::set<MuCluster *> & scs = *(op_iter->second);
+			auto scs_beg = scs.begin(), scs_end = scs.end();
+			while (scs_beg != scs_end) {
+				MuCluster * covelm = *(scs_beg++);
+				clusters.insert(covelm);
+			}
+		}
+	}
+}
+double SuOperatorSearch::get_coverage(const std::set<std::string> & ops) {
+	std::set<MuCluster *> clusters;
+	auto op_beg = ops.begin(), op_end = ops.end();
+	while (op_beg != op_end) {
+		const std::string & op = *(op_beg++);
+		if (op_scs.count(op) > 0) {
+			auto op_iter = op_scs.find(op);
+			const std::set<MuCluster *> & scs = *(op_iter->second);
+			auto scs_beg = scs.begin(), scs_end = scs.end();
+			while (scs_beg != scs_end) {
+				MuCluster * covelm = *(scs_beg++);
+				clusters.insert(covelm);
+			}
+		}
+	}
+
+	size_t covernum = clusters.size();
+	size_t totalnum = context.get_global_group().get_subsumings().size();
+	return ((double)covernum) / ((double)totalnum);
 }
 
 void OperatorWriter::open(const File & root) {
@@ -569,6 +780,13 @@ void OperatorWriter::write(MutLevel & data, const std::set<std::string> & SOP) {
 	this->write_summary(data, SOP, out1); out1.close();
 	std::ofstream out2(dir->get_path() + "/contribution.txt");
 	this->write_contribution(data, out2); out2.close();
+	// eliminate by now (for print dominator score map)
+	std::ofstream out3(dir->get_path() + "/opscores.txt");
+	this->write_contr_domscore(data, SOP, out3); out3.close();
+//	std::ofstream out4(dir->get_path() + "/ctscores.txt");
+//	this->write_domscore_line(data, out4); out4.close();
+//	std::ofstream out5(dir->get_path() + "/mutants.txt");
+//	this->write_mutants(data, out5); out5.close();
 
 	/* return */ return;
 }
@@ -689,16 +907,232 @@ MuCluster * OperatorWriter::belong_to(const MuCluster & cluster, const std::set<
 	}
 	return nullptr;
 }
+void OperatorWriter::write_contr_domscore(MutLevel & context, 
+	const std::set<std::string> & SOP, std::ostream & out) {
 
-void TestMachine::start(const std::set<std::string> & ops) {
-	close();
-	auto beg = ops.begin(), end = ops.end();
+	/* initialization */
+	SuOperatorSearch search(context); search.start();
+	TestMachine tmachine(context); BitSeq seq(SOP.size());
+	std::set<std::string> sel_ops; 
+	TestSet * testset = ctest.malloc_test_set();
+
+	std::set<MuCluster *> coverset;
+	std::map<unsigned, std::vector<double> *> solutions;
+
+	/* compute all pairs for solutions */
+	unsigned long long limit = std::pow(2, SOP.size());
+	for (unsigned long long k = 0; k < limit; k++) {
+		/* generate selected operators */
+		gen_combination(SOP, seq, sel_ops);	
+
+		/* get cover-set and numbers */
+		search.gen_coverset(sel_ops, coverset);	
+		unsigned covernum = coverset.size();
+
+		/* compute dominator score */
+		tmachine.generate_by_operators(*testset, sel_ops);
+		double score = tmachine.evaluate(*testset);
+		
+		/* get the set of scores for the coverage */
+		if (solutions.count(covernum) == 0) 
+			solutions[covernum] = new std::vector<double>();
+		auto iter = solutions.find(covernum);
+		std::vector<double> & scores = *(iter->second);
+
+		/* add score */ scores.push_back(score);
+		/* roll to the next */ seq.increase();	
+
+	} /* end for */
+
+	/* clear resources */
+	search.finish(); ctest.delete_test_set(testset);
+
+	/* title */ 
+	// out << "contribution\tmin\tavg\tmax\n";
+	out << "contribution\tdominator score\n";
+
+	/* output solution */
+	unsigned int totalnum = context.get_global_group().get_subsumings().size();
+	auto sbeg = solutions.begin();
+	auto send = solutions.end();
+	while (sbeg != send) {
+		/* get scores and coverage */
+		unsigned covernum = sbeg->first;
+		std::vector<double> * scores = sbeg->second;
+
+		/* get coverage */
+		double coverage = ((double)covernum) / ((double)totalnum);
+
+		/* get score set for output */
+		auto scbeg = scores->begin(), scend = scores->end();
+		while (scbeg != scend) {
+			double score = *(scbeg++);
+			out << coverage << "\t" << score << "\n";
+		}
+
+		/*
+		double min = 1.0, max = 0.0, sum = 0.0, avg;
+		auto scbeg = scores->begin(), scend = scores->end();
+		while (scbeg != scend) {
+			double score = *(scbeg++);
+			if (min > score) min = score;
+			if (max < score) max = score;
+			sum += score;
+		}
+		avg = sum / scores->size();
+
+		out << coverage << "\t" << min << "\t" << avg << "\t" << max << "\n";
+		*/
+
+		delete scores;	/* delete resource */
+		sbeg++;	/* roll to the next */
+	}
+	solutions.clear();
+}
+void OperatorWriter::gen_combination(const std::set<std::string> & source,
+	const BitSeq & sel_bits, std::set<std::string> & target) {
+
+	/* initialization */
+	target.clear(); BitSeq::size_t k = 0;
+	auto beg = source.begin(), end = source.end();
+
+	/* select operators */
 	while (beg != end) {
 		const std::string & op = *(beg++);
-		if(context.has_operator(op))
-			operators.insert(op);
+		if (sel_bits.get_bit(k++) == BIT_1) 
+			target.insert(op);
 	}
 }
+void OperatorWriter::write_domscore_line(MutLevel & context, std::ostream & out) {
+	/* initialization */
+	const std::set<MuCluster *> requirements 
+		= context.get_global_group().get_subsumings();
+	std::vector<MuCluster *> requirement_list;
+	auto rbeg = requirements.begin(), rend = requirements.end();
+	while (rbeg != rend) requirement_list.push_back(*(rbeg++));
+
+	/* solutions for contribution to dominator score(s) */
+	std::map<BitSeq::size_t, std::set<double> *> solutions;
+	std::set<MuCluster *> sel_reqs; TestMachine tmachine(context);
+	TestSet * tests = ctest.malloc_test_set();
+
+	/* combination iterate */
+	BitSeq seq(requirements.size());
+	do {
+		/* generate next requirement for selection */
+		gen_combination(requirement_list, seq, sel_reqs);	
+
+		/* evaluate test dominator score */
+		tmachine.generate_by_requirement(*tests, sel_reqs);
+		double dom_score = tmachine.evaluate(*tests);
+
+		/* get the set of dominator scores */
+		BitSeq::size_t req_num = seq.degree();
+		if (solutions.count(req_num) == 0) 
+			solutions[req_num] = new std::set<double>();
+		auto iter = solutions.find(req_num);
+		std::set<double> & scores = *(iter->second);
+
+		/* insert score */ scores.insert(dom_score);
+
+		/* roll to the next */ seq.increase();
+	} while (!seq.all_zeros());
+
+	/* delete test set */ ctest.delete_test_set(tests);
+
+	/* title */ out << "contribution\tmin\tavg\tmax\n";
+
+	/* output solution */
+	unsigned int totalnum = requirements.size();
+	auto sbeg = solutions.begin();
+	auto send = solutions.end();
+	while (sbeg != send) {
+		/* get scores and coverage */
+		unsigned covernum = sbeg->first;
+		std::set<double> * scores = sbeg->second;
+		double coverage = ((double)covernum) / ((double)totalnum);
+
+		double min = 1.0, max = 0.0, sum = 0.0, avg;
+		auto scbeg = scores->begin(), scend = scores->end();
+		while (scbeg != scend) {
+			double score = *(scbeg++);
+			if (min > score) min = score;
+			if (max < score) max = score;
+			sum += score;
+		}
+		avg = sum / scores->size();
+
+		out << coverage << "\t" << min << "\t" << avg << "\t" << max << "\n";
+
+		delete scores;	/* delete resource */
+		sbeg++;	/* roll to the next */
+	}
+	solutions.clear();
+}
+void OperatorWriter::gen_combination(const std::vector<MuCluster *> & source,
+	const BitSeq & sel_bits, std::set<MuCluster *> & target) {
+	/* initialization */
+	target.clear(); BitSeq::size_t k = 0;
+	auto beg = source.begin(), end = source.end();
+
+	/* select operators */
+	while (beg != end) {
+		MuCluster * cluster = *(beg++);
+		if (sel_bits.get_bit(k++) == BIT_1)
+			target.insert(cluster);
+	}
+}
+void OperatorWriter::trim_spaces(std::string & text) {
+	std::string cache; char ch; int n = text.length();
+	for (int i = 0; i < n; i++) {
+		ch = text[i];
+
+		if (ch == '\t' || ch == '\n') continue;
+		else cache += ch;
+	}
+	text = cache;
+}
+void OperatorWriter::write_mutants(MutLevel & data, std::ostream & out) {
+	/* declaration */
+	MutantSpace & mspace = data.get_space();
+	Mutant::ID mid, num = mspace.number_of_mutants();
+	const MutGroup & group = data.get_global_group();
+
+	out << "id\toperator\torigin\treplace\tcategory\tmode\n";
+	for (mid = 0; mid < num; mid++) {
+		/* get next mutant */
+		Mutant & mutant = mspace.get_mutant(mid);
+		const std::string & op = mutant.get_operator();
+		if (!data.has_operator(op)) continue;
+		const MutGroup & op_group = data.get_operator_group(op);
+
+		/* get category */
+		std::string category;
+		if (group.category_of(mid) == Subsuming_Category) {
+			category = "Subsuming";
+		}
+		else if (op_group.category_of(mid) == Equvalent_Category) {
+			category = "Equivalent";
+		}
+		else continue;
+
+		/* text */
+		const Mutation & mutation = 
+			mutant.get_mutation(mutant.get_orders() - 1);
+		std::string origin = mutation.get_location().get_text_at();
+		std::string replace = mutation.get_replacement();
+		trim_spaces(origin); trim_spaces(replace);
+
+		/* output line */
+		out << mid << "\t" << op << "\t";
+		out << origin << "\t" << replace << "\t";
+		out << category << "\t" << "";
+		out << "\n";
+	}
+
+	/* return */ out << std::endl;
+}
+
 double TestMachine::evaluate(const TestSet & tests) {
 	/* initialization */
 	const MutGroup & group = context.get_global_group(); 
@@ -722,7 +1156,7 @@ double TestMachine::evaluate(const TestSet & tests) {
 	}
 
 	/* TODO evaluate information */
-	std::cerr << "Dominator score: " << K << "/" << M << "\n";
+	//std::cerr << "Dominator score: " << K << "/" << M << "\n";
 
 	/* return */ return ((double) K) / ((double) M);
 }
@@ -733,11 +1167,18 @@ bool TestMachine::is_killed(const TestSet & tests, const MuCluster & cluster) {
 	//std::cerr << "\tResult: " << rseq.degree() << "\t" << rseq.all_zeros() << "\t" << !(rseq.all_zeros()) << "\n";
 	return !(rseq.all_zeros());
 }
-void TestMachine::generate(TestSet & tests) {
-	/* set requirements */
-	std::set<MuCluster *> requirements;
+void TestMachine::generate_by_operators(TestSet & tests, const std::set<std::string> & ops) {
+	/* selected operators */
+	std::set<std::string> operators;
+	auto beg = ops.begin(), end = ops.end();
+	while (beg != end) {
+		const std::string & op = *(beg++);
+		if (context.has_operator(op))
+			operators.insert(op);
+	}
 
 	/* add all subsuming clusters into requirements */
+	std::set<MuCluster *> requirements;
 	auto obeg = operators.begin();
 	auto oend = operators.end();
 	while (obeg != oend) {
@@ -755,58 +1196,72 @@ void TestMachine::generate(TestSet & tests) {
 			requirements.insert(*(sbeg++));
 	}
 
-	/* TODO output requirements Op-S: for debug */  
-	std::cerr << "Select requirements: " << requirements.size() << "\n";
-
-	/* generate template */
-	std::vector<BitSeq *> templates; std::vector<unsigned> seeds;
-	this->select_minimal_template(requirements, templates, tests.get_space());
-
-	/* generate test seeds */
-	for (int i = 0; i < templates.size(); i++) 
-		seeds.push_back(1);
-
-	/* generate test suite */
-	this->generate_test_suite(templates, seeds, tests);
-
-	/* clear test templates */
-	for (int i = 0; i < templates.size(); i++)
-		delete templates[i];
-	seeds.clear(); templates.clear();
+	/* generate tests by requirements */
+	generate_by_requirement(tests, requirements);
 
 	/* return */ return;
 }
-void TestMachine::generate_test_suite(
-	const std::vector<BitSeq *> & templates,
-	const std::vector<unsigned> & seeds,
-	TestSet & tests) {
-	/* validation & initialization */
-	if (seeds.size() != templates.size()) {
-		CError error(CErrorType::InvalidArguments, 
-			"TestMachine::generate_test_suite", 
-			"Inconsistent inputs");
-		CErrorConsumer::consume(error);
-		exit(CErrorType::InvalidArguments);
-	}
-	else tests.clear();
+void TestMachine::generate_by_requirement(TestSet & tests, const std::set<MuCluster *> & requirements) {
+	this->greedy_generate_tests(tests, requirements);
+}
+void TestMachine::greedy_generate_tests(TestSet & tests, const std::set<MuCluster *> & RS) {
+	/* initialization */
+	tests.clear(); std::set<MuCluster *> reduced;
+	std::set<MuCluster *> requirements;
+	auto rbeg = RS.begin(), rend = RS.end();
+	while (rbeg != rend) 
+		requirements.insert(*(rbeg++));
 
-	/* insert test id into set */
-	for (int i = 0; i < seeds.size(); i++) {
-		unsigned int seed = seeds[i];
-		const BitSeq & ri = *(templates[i]);
-		TestCase::ID tid = this->find_test_at(ri, seed);
-		tests.add_test(tid);
-	}
+	while (!requirements.empty()) {
+		/* get the next requirement to be met */
+		MuCluster & next_req = *(*(requirements.begin()));
+
+		/* eliminate equivalent cluster */
+		if (next_req.get_score_degree() == 0) {
+			requirements.erase(&next_req);
+			continue;
+		}
+
+		/* get the test set that kill this requirement */
+		const BitSeq & score_set = next_req.get_score_vector();
+		BitSeq::size_t score_deg = next_req.get_score_degree();
+
+		/* get one test that kill this requirement */
+		BitSeq::size_t rand_seed = gen_random_seed(score_deg);
+		TestCase::ID tid = find_test_at(score_set, rand_seed);
+
+		/* update requirement with newly test */
+		reduced.clear();
+		auto beg = requirements.begin();
+		auto end = requirements.end();
+		while (beg != end) {
+			MuCluster * req = *(beg++);
+			const BitSeq & tset = req->get_score_vector();
+			if (tset.get_bit(tid) == BIT_1) 
+				reduced.insert(req);
+		}
+
+		/* eliminate killed requirements */
+		beg = reduced.begin(), end = reduced.end();
+		while (beg != end) 
+			requirements.erase(*(beg++));
+
+		/* add into test set */ tests.add_test(tid);
+
+	} /* end while: kill requirements */
 
 	/* return */ return;
+}
+BitSeq::size_t TestMachine::gen_random_seed(BitSeq::size_t n) {
+	return 0 + std::rand() % n;
 }
 TestCase::ID TestMachine::find_test_at(const BitSeq & bits, TestCase::ID seed) {
 	TestCase::ID k, n = bits.bit_number(); 
 	unsigned origin_seed = seed;
 	for (k = 0; k < n; k++) {
 		if (bits.get_bit(k) == BIT_1) {
-			if ((--seed) == 0)
-				return k;
+			if (seed == 0) return k;
+			else seed--;
 		}
 	}
 
@@ -814,56 +1269,6 @@ TestCase::ID TestMachine::find_test_at(const BitSeq & bits, TestCase::ID seed) {
 	CError error(CErrorType::InvalidArguments, "TestMachine::find_test_at", 
 		"Undefined index (" + std::to_string(origin_seed) + ")");
 	CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
-}
-void TestMachine::select_minimal_template(
-	const std::set<MuCluster *> & requirements,
-	std::vector<BitSeq *> & templates,
-	const TestSpace & test_space) {
-	/* clusters to be eliminated */ 
-	std::set<MuCluster *> ER, RS; templates.clear();
-	BitSeq bits1(test_space.number_of_tests());
-	BitSeq bits2(test_space.number_of_tests());
-
-	/* initialization */
-	auto beg = requirements.begin();
-	auto end = requirements.end();
-	while (beg != end) RS.insert(*(beg++));
-
-	/* compute template for each requirement */
-	while (!RS.empty()) {
-		/* cluster the next groups */
-		beg = RS.begin(), end = RS.end();
-		
-		/* initialize test suite */
-		MuCluster * next = *(beg++);
-		bits1.assign(next->get_score_vector());
-		bits2.assign(next->get_score_vector());
-
-		/* compute clusters with common tests (maximum) */
-		ER.insert(next);
-		while (beg != end) {
-			next = *(beg++); 
-			bits2.conjunct(next->get_score_vector());
-			if (!bits2.all_zeros()) {
-				ER.insert(next);
-				bits1.assign(bits2);
-			}
-			else {
-				bits2.assign(bits1);
-			}
-		}
-
-		/* add new test set */
-		BitSeq * seq = new BitSeq(bits1);
-		templates.push_back(seq);
-
-		/* eliminate ER */
-		beg = ER.begin(), end = ER.end();
-		while (beg != end) 
-			RS.erase(*(beg++));
-	}
-
-	/* return */ return;
 }
 
 /* load the tests and mutants into the project */
@@ -912,29 +1317,61 @@ static void subsuming_operators(std::set<std::string> & oprts) {
 	oprts.insert("I-DirVarIncDec");
 	oprts.insert("I-IndVarIncDec");
 }
+/* identify and output the alpha-suf SMOs 
+		{alpha, contribution, dominator score, mutants, operators}
+*/
+static void output_operators(
+	const MutLevel & data, SuOperatorSearch & op_search,
+	const std::set<std::string> & ops, std::ostream & out,
+	CTest & ctest) {
+	/* get the coverage of killed subsuming clusters */
+	double coverage = op_search.get_coverage(ops);
+
+	/* compute dominator score */
+	TestMachine tmachine(data);
+	TestSet * tests = ctest.malloc_test_set();
+	tmachine.generate_by_operators(*tests, ops);
+	double score = tmachine.evaluate(*tests);
+	ctest.delete_test_set(tests);
+
+	/* get the number of mutants */
+	auto beg = ops.begin(), end = ops.end();
+	out << "operators: \t{"; size_t num = 0;
+	while (beg != end) {
+		const std::string & op = *(beg++);
+		if (data.has_operator(op)) {
+			out << op << ";";
+			const MutGroup & group = data.get_operator_group(op);
+			num += group.get_mutants().number_of_mutants();
+		}
+	}
+	out << "}\n";
+
+	/* output */
+	out << "mutants: \t" << num << "\n";
+	out << "contribution: \t" << coverage << "\n";
+	out << "dominator score; \t" << score << "\n";
+
+	/* return */ return;
+}
+/* get E-selective operators */
+static void E_selective_operators(std::set<std::string> & eops) {
+	eops.insert("u-OAAN");
+	eops.insert("u-ORRN");
+	eops.insert("u-OLLN");
+	eops.insert("I-DirVarIncDec");
+	// eops.insert("I-IndVarIncDec");
+}
 
 /* test */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "Day"; 
-	TestType ttype = TestType::general;
+	std::string prname = "tcas";
+	TestType ttype = TestType::tcas;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
-	const std::vector<File *> & files = root.list_files();
-	auto fbeg = files.begin(), fend = files.end();
-	File * dir = nullptr;
-	while (fbeg != fend) {
-		File * file = *(fbeg++);
-		if (file->get_local_name() == "analysis") {
-			dir = file; break;
-		}
-	}
-	if (dir == nullptr) {
-		CError error(CErrorType::Runtime, "main()", "./analysis is undefined");
-		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
-	}
 	 
 	// create code-project, mutant-project, test-project
 	CProgram & program = *(new CProgram(root));
@@ -969,53 +1406,69 @@ int main() {
 		MutLevel & data = analyzer.get_data();
 		std::cout << "Compute subsuming mutants: finished\n";
 
+		// debug operators
+		auto cbeg = debug_operators.begin();
+		auto cend = debug_operators.end();
+		std::cout << "\nUnused operators (" << debug_operators.size() << ")\n";
+		while (cbeg != cend) {
+			const std::string & op = *(cbeg++);
+			std::cout << op << "\n";
+		}
+		std::cout << "\n";
+
 		// solve subsuming operators
 		std::set<std::string> SOP;
 		SuOperatorSearch search(data);
 		search.start(); 
-		search.solve(SOP); 
+		// search.solve(SOP); 
 		// search.re_solve(SOP);
+		search.gr_solve(SOP);
 		search.finish();
 		std::cout << "Solving subsuming operators: " << SOP.size() << "\n";
 
 		// end output
-		OperatorWriter writer;
+		OperatorWriter writer(ctest);
 		writer.open(root);
 		writer.write(data, SOP);
 		writer.close();
 		std::cout << "Output subsuming mutants: finished\n";
 
-		// evaluation 
-//		std::set<std::string> oprts;
-//		selective_operators(oprts);
-//		subsuming_operators(oprts);
-//
-//		MutantSet & smutants = *(mspace.create_set());
-//		TestSet & stests = *(ctest.malloc_test_set());
-//		TestMachine machine(data);
-//		machine.start(oprts);
-//		std::cout << "\nStart to generate test...\n";
-//		machine.generate(stests);
-//		std::cout << "Select " << stests.size() << " tests from set...\n";
-//		double score = machine.evaluate(stests);
-//		std::cout << "Score is " << score * 100 << "%...\n";
+		// output sufficient operators, SOP, and EOPs
+		search.start();
+		std::cout << "alpha: 100%\n";
+		output_operators(data, search, SOP, std::cout, ctest);
+		std::cout << "\n";
 
+		std::set<std::string> SufSOP;
+
+		search.suf_solve(SOP, SufSOP, 0.80);
+		std::cout << "alpha: 80%\n";
+		output_operators(data, search, SufSOP, std::cout, ctest);
+		std::cout << "\n";
+
+		search.suf_solve(SOP, SufSOP, 0.90);
+		std::cout << "alpha: 90%\n";
+		output_operators(data, search, SufSOP, std::cout, ctest);
+		std::cout << "\n";
+
+		search.suf_solve(SOP, SufSOP, 0.95);
+		std::cout << "alpha: 95%\n";
+		output_operators(data, search, SufSOP, std::cout, ctest);
+		std::cout << "\n";
+
+		std::set<std::string> eops;
+		E_selective_operators(eops);
+		std::cout << "E-selective\n";
+		output_operators(data, search, eops, std::cout, ctest);
+		std::cout << "\n";
+
+		search.finish();
 	}
 
 	// delete memory
 	delete &cscore;
 	delete &cmutant; delete &ctest;
 	delete &program; delete &root;
-
-	// debug operators
-	auto cbeg = debug_operators.begin();
-	auto cend = debug_operators.end();
-	std::cout << "\nUnused operators:\n";
-	while (cbeg != cend) {
-		const std::string & op = *(cbeg++);
-		std::cout << op << "\n";
-	}
-	std::cout << "\n";
 
 	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);

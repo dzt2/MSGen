@@ -73,6 +73,8 @@ public:
 	void disjunct(const BitSeq &); 
 	/* negate all the bits in the sequence */
 	void bit_not();
+	/* increase by 1 */
+	void increase();
 
 	/* number of bit-ones in the bit-sequence */
 	size_t degree() const;

@@ -150,6 +150,19 @@ BitSeq::size_t BitSeq::degree() const {
 	}
 	return ones;
 }
+void BitSeq::increase() {
+	byte inc = 1;
+	for (size_t k = 0; k < length; k++) {
+		if (inc == 1) {
+			bytes[k] += inc;
+			if (bytes[k] == 0)
+				inc = 1;
+			else inc = 0;
+		}
+		else break;
+	}
+}
+
 
 // BitTrie
 BitTrie::BitTrie(BitSeq::size_t bias_index, const BitSeq & partial_key)

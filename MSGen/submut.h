@@ -166,9 +166,17 @@ public:
 	void solve(std::set<std::string> &);
 	/* identify the minimal subsuming operator by eliminating candidates */
 	void re_solve(std::set<std::string> &);
+	/* identify the minimal subsuming operator by greedy algorithm */
+	void gr_solve(std::set<std::string> &);
+	/* to identify the sufficient SMOs with initial complete SMOs (using elimination-backtrack) */
+	void suf_solve(const std::set<std::string> &, std::set<std::string> &, double alpha);
 	/* clear the searcher state machine */
 	void finish();
 
+	/* get the clusters (subsuming) coverred by specified operators set */
+	void gen_coverset(const std::set<std::string> &, std::set<MuCluster *> &);
+	/* get the contribution rate for selected operators set */
+	double get_coverage(const std::set<std::string> &);
 private:
 
 	/* type for state of search item */
@@ -204,18 +212,55 @@ private:
 protected:
 	/* {op_scs.keys; sc_ops.keys; 0; 0;} */
 	void int_stat();
+	/* {init_ops; sc_ops[init_ops]; 0; 0;} */
+	void init_stat(const std::set<std::string> &);
 	/* push the next item based on previous top item by selecting specified item */
 	void psh_stat();
 	/* push the next item based on previous top item by eliminate specified item */
 	void rpsh_stat();
+	/* push the next item based on previous top cluster */
+	void gpsh_stat();
 	/* pop the top item and delete its space */
 	void pop_stat();
+};
+/* machine for evaluating selective operators */
+class TestMachine {
+public:
+	/* create a closed machine for test generation */
+	TestMachine(const MutLevel & ctxt) : context(ctxt) {}
+	/* deconstructor */
+	~TestMachine() {}
+
+	/* generate a minimal test set for subsuming mutants in given operators */
+	void generate_by_operators(TestSet &, const std::set<std::string> &);
+	/* generate test set from clusters requirement */
+	void generate_by_requirement(TestSet &, const std::set<MuCluster *> &);
+	/* evaluate the dominator score of given test suite */
+	double evaluate(const TestSet &);
+
+	/* get the context where tests are generated */
+	const MutLevel & get_context() const { return context; }
+
+private:
+	/* context for test generation */
+	const MutLevel & context;
+
+	/* generate a random index in [0, n - 1] */
+	BitSeq::size_t gen_random_seed(BitSeq::size_t);
+	/* find the kth 1 in bit sequence*/
+	TestCase::ID find_test_at(const BitSeq &, TestCase::ID);
+	/* whether the tests can kill specified cluster */
+	bool is_killed(const TestSet &, const MuCluster &);
+
+protected:
+	/* generate tests by greedy algorithm */
+	void greedy_generate_tests(TestSet &, const std::set<MuCluster *> &);
 };
 /* writer to identify subsuming operators and compute the contributions */
 class OperatorWriter {
 public:
 	/* create writer for subsuming operators */
-	OperatorWriter() : dir(nullptr) {}
+	OperatorWriter(CTest & context) : dir(nullptr), ctest(context) {}
 	/* deconstructor */
 	~OperatorWriter() { close(); }
 
@@ -231,57 +276,26 @@ protected:
 	void write_summary(MutLevel &, const std::set<std::string> &, std::ostream &);
 	/* {op, Mut, Equiv, SMut, Cop, Eop} */
 	void write_contribution(MutLevel &, std::ostream &);
+	/* write [id, contribution rate, dom-score] */
+	void write_contr_domscore(MutLevel &, const std::set<std::string> &, std::ostream &);
+	/* write [id, contribution, dom-score] */
+	void write_domscore_line(MutLevel &, std::ostream &);
+	/* write [mid, oprt, origin, replace, mode, category] */
+	void write_mutants(MutLevel &, std::ostream &);
 
 private:
 	/* ../analysis/ */
 	const File * dir;
+	/* context for test set */
+	CTest & ctest;
+
 	/* whether cluster equals with one of the candidate */
 	MuCluster * belong_to(const MuCluster &, const std::set<MuCluster *> &);
-};
+	/* generate a next combination of operators from bit-string */
+	void gen_combination(const std::set<std::string> &, const BitSeq &, std::set<std::string> &);
+	/* generate subset of clusters based on context by bit-string */
+	void gen_combination(const std::vector<MuCluster *> &, const BitSeq &, std::set<MuCluster *> &);
 
-/* machine for evaluating selective operators */
-class TestMachine {
-public:
-	/* create a closed machine for test generation */
-	TestMachine(const MutLevel & ctxt) : context(ctxt), operators() {}
-	/* deconstructor */
-	~TestMachine() { close(); }
-
-	/* set the context for test generation */
-	void start(const std::set<std::string> &);
-	/* generate a minimal test set for subsuming mutants in given operators */
-	void generate(TestSet &);
-	/* evaluate the dominator score of given test suite */
-	double evaluate(const TestSet &);
-	/* close the test machine for generation */
-	void close() { operators.clear(); }
-
-	/* get the context where tests are generated */
-	const MutLevel & get_context() const { return context; }
-	/* get the subsuming operators selected by start() */
-	const std::set<std::string> & get_selected_operators() const { return operators; }
-
-private:
-	/* context for test generation */
-	const MutLevel & context;
-	/* selected operators */
-	std::set<std::string> operators;
-
-protected:
-	/* select minimal test template for given requirements (greedy algorithm), the requirements will be */
-	void select_minimal_template(
-		const std::set<MuCluster *> & requirements,
-		std::vector<BitSeq *> & templates,
-		const TestSpace & test_space
-	);
-	/* find the kth 1 in bit sequence*/
-	TestCase::ID find_test_at(const BitSeq &, TestCase::ID);
-	/* generate tests from template by given seeds */
-	void generate_test_suite(
-		const std::vector<BitSeq *> & templates,
-		const std::vector<unsigned> & seeds,
-		TestSet & tests
-	);
-	/* whether the tests can kill specified cluster */
-	bool is_killed(const TestSet &, const MuCluster &);
+	/* eliminate the spaces between mutants */
+	void trim_spaces(std::string &);
 };
