@@ -187,8 +187,9 @@ bool MutLevel::valid_operator(const std::string & op) {
 		|| op == "u-ORAN" || op == "u-ORAA" || op == "u-ORBN" || op == "u-ORBA" || op == "u-OREA" || op == "u-ORRN" || op == "u-ORLN" || op == "u-ORLA" || op == "u-ORSN" || op == "u-ORSA"
 		|| op == "u-OEAN" || op == "u-OEAA" || op == "u-OEBN" || op == "u-OEBA" || op == "u-OERN" || op == "u-OELN" || op == "u-OELA" || op == "u-OESN" || op == "u-OESA") return true;
 	else {
-		debug_operators.insert(op);
-		return false;
+		//debug_operators.insert(op);
+		//return false;
+		return true;
 	}
 }
 
@@ -781,8 +782,10 @@ void OperatorWriter::write(MutLevel & data, const std::set<std::string> & SOP) {
 	std::ofstream out2(dir->get_path() + "/contribution.txt");
 	this->write_contribution(data, out2); out2.close();
 	// eliminate by now (for print dominator score map)
-	std::ofstream out3(dir->get_path() + "/opscores.txt");
-	this->write_contr_domscore(data, SOP, out3); out3.close();
+//	std::ofstream out3(dir->get_path() + "/opscores.txt");
+//	std::ofstream out4(dir->get_path() + "/avgscores.txt");
+//	this->write_contr_domscore(data, SOP, out3, out4); 
+//	out3.close(); out4.close();
 //	std::ofstream out4(dir->get_path() + "/ctscores.txt");
 //	this->write_domscore_line(data, out4); out4.close();
 //	std::ofstream out5(dir->get_path() + "/mutants.txt");
@@ -908,7 +911,7 @@ MuCluster * OperatorWriter::belong_to(const MuCluster & cluster, const std::set<
 	return nullptr;
 }
 void OperatorWriter::write_contr_domscore(MutLevel & context, 
-	const std::set<std::string> & SOP, std::ostream & out) {
+	const std::set<std::string> & SOP, std::ostream & out, std::ostream & aout) {
 
 	/* initialization */
 	SuOperatorSearch search(context); search.start();
@@ -953,8 +956,8 @@ void OperatorWriter::write_contr_domscore(MutLevel & context,
 
 	/* output solution */
 	unsigned int totalnum = context.get_global_group().get_subsumings().size();
-	auto sbeg = solutions.begin();
-	auto send = solutions.end();
+	auto sbeg = solutions.begin(), send = solutions.end();
+	std::map<double, double> avg_solutions;
 	while (sbeg != send) {
 		/* get scores and coverage */
 		unsigned covernum = sbeg->first;
@@ -965,10 +968,14 @@ void OperatorWriter::write_contr_domscore(MutLevel & context,
 
 		/* get score set for output */
 		auto scbeg = scores->begin(), scend = scores->end();
+		double average = 0;
 		while (scbeg != scend) {
 			double score = *(scbeg++);
 			out << coverage << "\t" << score << "\n";
+			average += score;
 		}
+		average = average / scores->size();
+		avg_solutions[coverage] = average;
 
 		/*
 		double min = 1.0, max = 0.0, sum = 0.0, avg;
@@ -988,6 +995,19 @@ void OperatorWriter::write_contr_domscore(MutLevel & context,
 		sbeg++;	/* roll to the next */
 	}
 	solutions.clear();
+
+	/* output average */
+	aout << "contribution\taverage score\n";
+	auto abeg = avg_solutions.begin();
+	auto aend = avg_solutions.end();
+	while (abeg != aend) {
+		double coverage = abeg->first;
+		double score = abeg->second;
+		aout << coverage << "\t" << score << "\n";
+		abeg++;
+	}
+
+	/* end */ return;
 }
 void OperatorWriter::gen_combination(const std::set<std::string> & source,
 	const BitSeq & sel_bits, std::set<std::string> & target) {
@@ -1346,9 +1366,10 @@ static void output_operators(
 		}
 	}
 	out << "}\n";
+	size_t total = data.get_space().number_of_mutants();
 
 	/* output */
-	out << "mutants: \t" << num << "\n";
+	out << "mutants: \t" << ((double) num) / ((double) total)  << "\n";
 	out << "contribution: \t" << coverage << "\n";
 	out << "dominator score; \t" << score << "\n";
 
@@ -1367,8 +1388,8 @@ static void E_selective_operators(std::set<std::string> & eops) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "tcas";
-	TestType ttype = TestType::tcas;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -1434,35 +1455,46 @@ int main() {
 		std::cout << "Output subsuming mutants: finished\n";
 
 		// output sufficient operators, SOP, and EOPs
+		std::ofstream out(root.get_path() + "/analysis/sufsop.txt");
+
 		search.start();
-		std::cout << "alpha: 100%\n";
-		output_operators(data, search, SOP, std::cout, ctest);
-		std::cout << "\n";
+		out << "alpha: 100%\n";
+		output_operators(data, search, SOP, out, ctest);
+		std::cout << "alpha 100% finished (" << SOP.size() << ")\n";
+		out << "\n";
 
 		std::set<std::string> SufSOP;
 
+		search.suf_solve(SOP, SufSOP, 0.60);
+		std::cout << "Compute 0.6-sufficient SOPs...\n";
+
+		out << "alpha: 60%\n";
+		output_operators(data, search, SufSOP, out, ctest);
+		out << "\n";
+
 		search.suf_solve(SOP, SufSOP, 0.80);
-		std::cout << "alpha: 80%\n";
-		output_operators(data, search, SufSOP, std::cout, ctest);
-		std::cout << "\n";
+		std::cout << "Compute 0.8-sufficient SOPs...\n";
+
+		out << "alpha: 90%\n";
+		output_operators(data, search, SufSOP, out, ctest);
+		out << "\n";
 
 		search.suf_solve(SOP, SufSOP, 0.90);
-		std::cout << "alpha: 90%\n";
-		output_operators(data, search, SufSOP, std::cout, ctest);
-		std::cout << "\n";
+		std::cout << "Compute 0.9-sufficient SOPs...\n";
 
-		search.suf_solve(SOP, SufSOP, 0.95);
-		std::cout << "alpha: 95%\n";
-		output_operators(data, search, SufSOP, std::cout, ctest);
-		std::cout << "\n";
+		out << "alpha: 90%\n";
+		output_operators(data, search, SufSOP, out, ctest);
+		out << "\n";
 
 		std::set<std::string> eops;
 		E_selective_operators(eops);
-		std::cout << "E-selective\n";
-		output_operators(data, search, eops, std::cout, ctest);
-		std::cout << "\n";
+		out << "E-selective\n";
+		output_operators(data, search, eops, out, ctest);
+		out << "\n";
 
-		search.finish();
+		search.finish(); out.close();
+
+		std::cout << "Output finished.\n\n";
 	}
 
 	// delete memory

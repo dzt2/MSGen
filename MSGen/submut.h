@@ -277,7 +277,7 @@ protected:
 	/* {op, Mut, Equiv, SMut, Cop, Eop} */
 	void write_contribution(MutLevel &, std::ostream &);
 	/* write [id, contribution rate, dom-score] */
-	void write_contr_domscore(MutLevel &, const std::set<std::string> &, std::ostream &);
+	void write_contr_domscore(MutLevel &, const std::set<std::string> &, std::ostream &, std::ostream &);
 	/* write [id, contribution, dom-score] */
 	void write_domscore_line(MutLevel &, std::ostream &);
 	/* write [mid, oprt, origin, replace, mode, category] */
