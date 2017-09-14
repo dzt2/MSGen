@@ -661,3 +661,81 @@ void MSGBuilder::close() {
 		delete trie;
 	}
 }
+
+void MSGraphPrinter::write(MSGraph & graph) {
+	if (dir == nullptr) {
+		CError error(CErrorType::Runtime, 
+			"MSGraphPrinter::write(graph)", 
+			"directory is not opened");
+		CErrorConsumer::consume(error);
+	}
+	else {
+		std::ofstream out1(dir->get_path() + "/graph.txt");
+		write_mutant_graph(graph, out1); out1.close();
+
+		std::ofstream out2(dir->get_path() + "/mutantLib.txt");
+		write_mutant_lib(graph, out2); out2.close();
+	}
+}
+void MSGraphPrinter::write_mutant_graph(MSGraph & graph, std::ostream & out) {
+	/* Line : source |--> directly_subsumed_cluster(s) */
+	size_t cnum = graph.size();
+	out << "source\tdegree\tnext(s)\n";
+
+	/* get each cluster and their edges */
+	for (MuCluster::ID cid = 0; cid < cnum; cid++) {
+		MuCluster & src = graph.get_cluster(cid);
+		size_t degree = src.get_score_degree();
+
+		out << cid << "\t" << degree << "\t";
+
+		const std::vector<MuSubsume> & edges = src.get_ou_port().get_edges();
+		auto beg = edges.begin(), end = edges.end();
+		while (beg != end) {
+			const MuSubsume & edge = *(beg++);
+			out << edge.get_target().get_id();
+			if (beg != end) out << "; ";
+		}
+
+		out << "\n";
+	}
+
+	/* return */ out << std::endl; return;
+}
+void MSGraphPrinter::write_mutant_lib(MSGraph & graph, std::ostream & out) {
+	MutantSpace & mspace = graph.get_space();
+	Mutant::ID mid = 0, mnum = mspace.number_of_mutants();
+
+	out << "mid\toperator\torigin\treplace\tcluster\tdegree\n";
+
+	for (mid = 0; mid < mnum; mid++) {
+		if (graph.has_cluster_of(mid)) {
+			Mutant & mutant = mspace.get_mutant(mid);
+			MuCluster & cluster = graph.get_cluster_of(mid);
+			
+			out << mid << "\t" << mutant.get_operator() << "\t";
+
+			const Mutation & mutation = 
+				mutant.get_mutation(mutant.get_orders() - 1);
+			std::string origin, replace;
+
+			origin = mutation.get_location().get_text_at();
+			replace = mutation.get_replacement();
+			replace_text(origin); replace_text(replace);
+
+			out << origin << "\t" << replace << "\t";
+
+			out << cluster.get_id() << "\t" << cluster.get_score_degree() << "\n";
+		}
+	}
+}
+void MSGraphPrinter::replace_text(std::string & text) {
+	int n = text.length();
+	std::string replace = "";
+	for (int i = 0; i < n; i++) {
+		char ch = text[i];
+		if (ch == '\t' || ch == '\n');
+		else replace += ch;
+	}
+	text = replace;
+}

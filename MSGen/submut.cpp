@@ -1153,144 +1153,6 @@ void OperatorWriter::write_mutants(MutLevel & data, std::ostream & out) {
 	/* return */ out << std::endl;
 }
 
-double TestMachine::evaluate(const TestSet & tests) {
-	/* initialization */
-	const MutGroup & group = context.get_global_group(); 
-	const std::set<MuCluster *> & dom_mutants = group.get_subsumings();
-	size_t K = 0, M = dom_mutants.size();
-
-	/* validation */
-	if (M == 0) {
-		CError error(CErrorType::Runtime, "TestMachine::evaluate", 
-			"Invalid context: empty global subsuming mutants");
-		CErrorConsumer::consume(error); exit(CErrorType::Runtime);
-	}
-
-	/* count the number of killed dominator mutants */
-	auto beg = dom_mutants.begin(), end = dom_mutants.end();
-	while (beg != end) {
-		MuCluster & cluster = *(*(beg++));
-		if (is_killed(tests, cluster)) {
-			K++; 
-		}
-	}
-
-	/* TODO evaluate information */
-	//std::cerr << "Dominator score: " << K << "/" << M << "\n";
-
-	/* return */ return ((double) K) / ((double) M);
-}
-bool TestMachine::is_killed(const TestSet & tests, const MuCluster & cluster) {
-	const BitSeq & tseq = tests.get_set_vector();
-	const BitSeq & mseq = cluster.get_score_vector();
-	BitSeq rseq(mseq); rseq.conjunct(tseq);
-	//std::cerr << "\tResult: " << rseq.degree() << "\t" << rseq.all_zeros() << "\t" << !(rseq.all_zeros()) << "\n";
-	return !(rseq.all_zeros());
-}
-void TestMachine::generate_by_operators(TestSet & tests, const std::set<std::string> & ops) {
-	/* selected operators */
-	std::set<std::string> operators;
-	auto beg = ops.begin(), end = ops.end();
-	while (beg != end) {
-		const std::string & op = *(beg++);
-		if (context.has_operator(op))
-			operators.insert(op);
-	}
-
-	/* add all subsuming clusters into requirements */
-	std::set<MuCluster *> requirements;
-	auto obeg = operators.begin();
-	auto oend = operators.end();
-	while (obeg != oend) {
-		/* get the next operator-group */
-		const std::string & oprt = *(obeg++);
-		const MutGroup & op_group = 
-			context.get_operator_group(oprt);
-		const std::set<MuCluster *> &
-			subsumings = op_group.get_subsumings();
-
-		/* add the subsuming clusters */
-		auto sbeg = subsumings.begin();
-		auto send = subsumings.end();
-		while (sbeg != send) 
-			requirements.insert(*(sbeg++));
-	}
-
-	/* generate tests by requirements */
-	generate_by_requirement(tests, requirements);
-
-	/* return */ return;
-}
-void TestMachine::generate_by_requirement(TestSet & tests, const std::set<MuCluster *> & requirements) {
-	this->greedy_generate_tests(tests, requirements);
-}
-void TestMachine::greedy_generate_tests(TestSet & tests, const std::set<MuCluster *> & RS) {
-	/* initialization */
-	tests.clear(); std::set<MuCluster *> reduced;
-	std::set<MuCluster *> requirements;
-	auto rbeg = RS.begin(), rend = RS.end();
-	while (rbeg != rend) 
-		requirements.insert(*(rbeg++));
-
-	while (!requirements.empty()) {
-		/* get the next requirement to be met */
-		MuCluster & next_req = *(*(requirements.begin()));
-
-		/* eliminate equivalent cluster */
-		if (next_req.get_score_degree() == 0) {
-			requirements.erase(&next_req);
-			continue;
-		}
-
-		/* get the test set that kill this requirement */
-		const BitSeq & score_set = next_req.get_score_vector();
-		BitSeq::size_t score_deg = next_req.get_score_degree();
-
-		/* get one test that kill this requirement */
-		BitSeq::size_t rand_seed = gen_random_seed(score_deg);
-		TestCase::ID tid = find_test_at(score_set, rand_seed);
-
-		/* update requirement with newly test */
-		reduced.clear();
-		auto beg = requirements.begin();
-		auto end = requirements.end();
-		while (beg != end) {
-			MuCluster * req = *(beg++);
-			const BitSeq & tset = req->get_score_vector();
-			if (tset.get_bit(tid) == BIT_1) 
-				reduced.insert(req);
-		}
-
-		/* eliminate killed requirements */
-		beg = reduced.begin(), end = reduced.end();
-		while (beg != end) 
-			requirements.erase(*(beg++));
-
-		/* add into test set */ tests.add_test(tid);
-
-	} /* end while: kill requirements */
-
-	/* return */ return;
-}
-BitSeq::size_t TestMachine::gen_random_seed(BitSeq::size_t n) {
-	return 0 + std::rand() % n;
-}
-TestCase::ID TestMachine::find_test_at(const BitSeq & bits, TestCase::ID seed) {
-	TestCase::ID k, n = bits.bit_number(); 
-	unsigned origin_seed = seed;
-	for (k = 0; k < n; k++) {
-		if (bits.get_bit(k) == BIT_1) {
-			if (seed == 0) return k;
-			else seed--;
-		}
-	}
-
-	/* not found */
-	CError error(CErrorType::InvalidArguments, "TestMachine::find_test_at", 
-		"Undefined index (" + std::to_string(origin_seed) + ")");
-	CErrorConsumer::consume(error); exit(CErrorType::InvalidArguments);
-}
-
 /* load the tests and mutants into the project */
 static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 	ctest.load(); const TestSpace & tspace = ctest.get_space();
@@ -1385,6 +1247,7 @@ static void E_selective_operators(std::set<std::string> & eops) {
 }
 
 /* test */
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
@@ -1505,3 +1368,4 @@ int main() {
 	// exit
 	std::cout << "Press any key to exit...\n"; getchar(); exit(0);
 }
+*/

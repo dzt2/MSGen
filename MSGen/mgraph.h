@@ -24,6 +24,7 @@ class MuSubsume;
 class MuSubsumePort;
 class MuHierarchy;
 class MSGraph;
+class MSGraphPrinter;
 
 // class for building MSG
 class _MSG_VSpace;
@@ -259,6 +260,32 @@ protected:
 	/* update the set of roots and leafs in graph */
 	void update_roots_and_leafs();
 };
+/* print the information in graph */
+class MSGraphPrinter {
+public:
+	/* create printer for MSG */
+	MSGraphPrinter() : dir(nullptr) {}
+	/* deconstructor */
+	~MSGraphPrinter() { close(); }
+
+	/* open directory where files are written */
+	void open(File & file) { close(); dir = &file; }
+	/* write graph information to graph.txt and mutantLib.txt in directory that has been openned */
+	void write(MSGraph &);
+	/* close the directory for printing */
+	void close() { dir = nullptr; }
+
+private:
+	File * dir;		/* directory where graph.txt and mutantLib.txt are written */
+	void replace_text(std::string &);
+
+protected:
+	/* write dir/graph.txt */
+	void write_mutant_lib(MSGraph &, std::ostream &);
+	/* write dir/mutantLib.txt */
+	void write_mutant_graph(MSGraph &, std::ostream &);
+};
+
 
 /* visit space for sub-graph in MSG */
 class _MSG_VSpace {

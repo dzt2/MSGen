@@ -223,39 +223,6 @@ protected:
 	/* pop the top item and delete its space */
 	void pop_stat();
 };
-/* machine for evaluating selective operators */
-class TestMachine {
-public:
-	/* create a closed machine for test generation */
-	TestMachine(const MutLevel & ctxt) : context(ctxt) {}
-	/* deconstructor */
-	~TestMachine() {}
-
-	/* generate a minimal test set for subsuming mutants in given operators */
-	void generate_by_operators(TestSet &, const std::set<std::string> &);
-	/* generate test set from clusters requirement */
-	void generate_by_requirement(TestSet &, const std::set<MuCluster *> &);
-	/* evaluate the dominator score of given test suite */
-	double evaluate(const TestSet &);
-
-	/* get the context where tests are generated */
-	const MutLevel & get_context() const { return context; }
-
-private:
-	/* context for test generation */
-	const MutLevel & context;
-
-	/* generate a random index in [0, n - 1] */
-	BitSeq::size_t gen_random_seed(BitSeq::size_t);
-	/* find the kth 1 in bit sequence*/
-	TestCase::ID find_test_at(const BitSeq &, TestCase::ID);
-	/* whether the tests can kill specified cluster */
-	bool is_killed(const TestSet &, const MuCluster &);
-
-protected:
-	/* generate tests by greedy algorithm */
-	void greedy_generate_tests(TestSet &, const std::set<MuCluster *> &);
-};
 /* writer to identify subsuming operators and compute the contributions */
 class OperatorWriter {
 public:

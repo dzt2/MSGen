@@ -136,6 +136,8 @@ public:
 	const MuClusterSet & get_clusters() const { return clusters; }
 	/* get the map from operator to clusters */
 	const OpClusterMap & get_mappings() const { return mappings; }
+	/* get the map from operators to mutants */
+	const OpMutantMap & get_operators() const { return operators; }
 	/* get the subsuming operators (100-sufficient) */
 	const std::set<std::string> & get_subsuming_operators() const { return SOPSet; }
 	/* get the alpha-sufficient operators */
@@ -207,3 +209,102 @@ protected:
 	/* get the number of mutants created by this operator */
 	unsigned evaluate(const std::string &) const;
 };
+/* writer for subsuming operators */
+class SuOprtWriter {
+public:
+	/* create writer for subsuming operators */
+	SuOprtWriter(const TestSpace & tset) : dir(nullptr), tspace(tset) {}
+	/* deconstructor */
+	~SuOprtWriter() { close(); }
+
+	/* open ../analysis */
+	void open(const File & root) {
+		close();	/* initialization */
+
+		/* get the directory */
+		const std::vector<File *> & files = root.list_files();
+		for (int i = 0; i < files.size(); i++) {
+			File * file = files[i];
+			if (file->get_local_name() == "analysis") {
+				dir = file; break;
+			}
+		}
+
+		/* validate */
+		if (dir == nullptr) {
+			CError error(CErrorType::InvalidArguments, 
+				"SuOprtWriter::open", 
+				"\"analysis\" is not found at: " + root.get_path());
+			CErrorConsumer::consume(error);
+			exit(CErrorType::InvalidArguments);
+		}
+	}
+	/* writer information in subsuming operators to ../analysis */
+	void write(SOperatorSet &);
+
+	/* generate evaluation on specified alpha-SMOs [alpha, oplist, cov, score, costs] */
+	void eval_operators(SOperatorSet &, const std::vector<double> &);
+
+	/* close writer */
+	void close() { dir = nullptr; }
+
+private:
+	const TestSpace & tspace;
+	File * dir;	// ../analysis/
+
+protected:
+	/* ../analysis/summary.txt */
+	void write_summary(SOperatorSet &, std::ostream &);
+	/* ../analysis/coverage.txt */
+	void write_coverage(SOperatorSet &, std::ostream &);
+	/* ../analysis/score_line.txt */
+	void write_scoreln(SOperatorSet &, std::ostream &);
+	/* ../analysis/mutantset.txt */
+	void write_mutants(SOperatorSet &, std::ostream &);
+
+	/* {coverage, dom_score} */
+	void gen_cov_score(SOperatorSet &, const std::set<std::string> &, std::ostream &, TestSet &);
+	/* select operators set based on bit-string */
+	void select_operators(const std::vector<std::string> &, const BitSeq &, std::set<std::string> &);
+
+	/* get the covered subsuming clusters by specified operator */
+	void get_coverage(SOperatorSet &, std::set<MuCluster *> &, const std::string &);
+	/* {alpha, oplist, cop, dscore} */
+	void write_oplist(SOperatorSet &, const std::set<std::string> &, std::ostream &, TestSet &);
+	/* remove spaces (\t, \n) in text */
+	void trim_spaces(std::string &);
+};
+/* machine for evaluating selective operators */
+class TestMachine {
+public:
+	/* create a closed machine for test generation */
+	TestMachine(const SOperatorSet & ctxt) : context(ctxt) {}
+	/* deconstructor */
+	~TestMachine() {}
+
+	/* generate a minimal test set for subsuming mutants in given operators */
+	void generate_by_operators(TestSet &, const std::set<std::string> &);
+	/* generate test set from clusters requirement */
+	void generate_by_requirement(TestSet &, const std::set<MuCluster *> &);
+	/* evaluate the dominator score of given test suite */
+	double evaluate(const TestSet &);
+
+	/* get the context where tests are generated */
+	const SOperatorSet & get_context() const { return context; }
+
+private:
+	/* context for test generation */
+	const SOperatorSet & context;
+
+	/* generate a random index in [0, n - 1] */
+	BitSeq::size_t gen_random_seed(BitSeq::size_t);
+	/* find the kth 1 in bit sequence*/
+	TestCase::ID find_test_at(const BitSeq &, TestCase::ID);
+	/* whether the tests can kill specified cluster */
+	bool is_killed(const TestSet &, const MuCluster &);
+
+protected:
+	/* generate tests by greedy algorithm */
+	void greedy_generate_tests(TestSet &, const std::set<MuCluster *> &);
+};
+

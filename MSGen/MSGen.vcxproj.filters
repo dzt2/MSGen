@@ -66,9 +66,6 @@
     <ClInclude Include="mgraph.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
-    <ClInclude Include="submut.h">
-      <Filter>Header Files\graph</Filter>
-    </ClInclude>
     <ClInclude Include="suoprt.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
@@ -109,9 +106,6 @@
     </ClCompile>
     <ClCompile Include="autotest.cpp">
       <Filter>Source Files\driver</Filter>
-    </ClCompile>
-    <ClCompile Include="submut.cpp">
-      <Filter>Source Files\graph</Filter>
     </ClCompile>
     <ClCompile Include="suoprt.cpp">
       <Filter>Source Files\graph</Filter>
