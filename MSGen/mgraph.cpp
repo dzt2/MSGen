@@ -706,26 +706,31 @@ void MSGraphPrinter::write_mutant_lib(MSGraph & graph, std::ostream & out) {
 	MutantSpace & mspace = graph.get_space();
 	Mutant::ID mid = 0, mnum = mspace.number_of_mutants();
 
-	out << "mid\toperator\torigin\treplace\tcluster\tdegree\n";
+	out << "mid\toperator\tline\torigin\treplace\tcluster\tdegree\n";
 
 	for (mid = 0; mid < mnum; mid++) {
 		if (graph.has_cluster_of(mid)) {
 			Mutant & mutant = mspace.get_mutant(mid);
 			MuCluster & cluster = graph.get_cluster_of(mid);
 			
-			out << mid << "\t" << mutant.get_operator() << "\t";
+			out << mid << "\t" << mutant.get_operator() << "\t";	/* mid operator */
 
 			const Mutation & mutation = 
 				mutant.get_mutation(mutant.get_orders() - 1);
 			std::string origin, replace;
 
+			const TextBuild * text = mutation.
+				get_location().get_file().get_text();
+			out << text->lineOfIndex(mutation.get_location().get_bias()) << "\t";	/* line */
+
+
 			origin = mutation.get_location().get_text_at();
 			replace = mutation.get_replacement();
 			replace_text(origin); replace_text(replace);
 
-			out << origin << "\t" << replace << "\t";
+			out << origin << "\t" << replace << "\t";		/* origin replace */
 
-			out << cluster.get_id() << "\t" << cluster.get_score_degree() << "\n";
+			out << cluster.get_id() << "\t" << cluster.get_score_degree() << "\n";	/* cluster degree */
 		}
 	}
 }

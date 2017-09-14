@@ -955,6 +955,7 @@ static void build_subsumption_graph(MSGraph & graph,
 
 	/* end */ return;
 }
+/* build up mutant subsumption graph with specified filter */
 static void build_subsumption_graph(MSGraph & graph,
 	ScoreProducer & producer, ScoreConsumer & consumer,
 	MutantSpace & mspace, bool(*filter)(Mutant &)) {
@@ -992,7 +993,7 @@ bool is_trap_mutant(Mutant & mutant) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "triangle";
+	std::string prname = "mid";
 	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
