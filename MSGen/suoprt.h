@@ -261,6 +261,8 @@ protected:
 	void write_scoreln(SOperatorSet &, std::ostream &);
 	/* ../analysis/mutantset.txt */
 	void write_mutants(SOperatorSet &, std::ostream &);
+	/* ../analysis/operator_score.txt */
+	void write_op_scores(SOperatorSet &, std::ostream &);
 
 	/* {coverage, dom_score} */
 	void gen_cov_score(SOperatorSet &, const std::set<std::string> &, std::ostream &, TestSet &);

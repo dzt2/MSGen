@@ -537,6 +537,8 @@ void SuOprtWriter::write(SOperatorSet & data) {
 		write_coverage(data, out2); out2.close();
 		//std::ofstream out3(dir->get_path() + "/score_lines.txt");
 		//write_scoreln(data, out3); out3.close();
+		std::ofstream out4(dir->get_path() + "/op_scores.txt");
+		write_op_scores(data, out4); out4.close();
 		std::ofstream out5(dir->get_path() + "/mutantset.txt");
 		write_mutants(data, out5); out5.close();
 	}
@@ -688,7 +690,7 @@ void SuOprtWriter::write_mutants(SOperatorSet & data, std::ostream & out) {
 	const MSGraph & graph = data.get_clusters().get_graph();
 
 	/* title */
-	out << "id\tcluster\toperator\torigin\treplace\n";
+	out << "id\tcluster\toperator\tline\torigin\treplace\n";
 
 	/* output lines */
 	for (mid = 0; mid < num; mid++) {
@@ -707,8 +709,10 @@ void SuOprtWriter::write_mutants(SOperatorSet & data, std::ostream & out) {
 				std::string replace = mutation.get_replacement();
 				trim_spaces(origin); trim_spaces(replace);
 
-				out << mid << "\t" << cluster.get_id() << "\t" << 
-					op << "\t" << origin << "\t" << replace << "\n";
+				int line = loc.get_file().get_text()->lineOfIndex(loc.get_bias());
+
+				out << mid << "\t" << cluster.get_id() << "\t" << op << "\t"
+					<< line << "\t" << origin << "\t" << replace << "\n";
 			}
 		}
 	}	/* end for */
@@ -780,6 +784,31 @@ void SuOprtWriter::write_scoreln(SOperatorSet & data, std::ostream & out) {
 	}
 
 	/* return */ 
+	((CTest &)tspace.get_project()).delete_test_set(tests);
+}
+void SuOprtWriter::write_op_scores(SOperatorSet & data, std::ostream & out) {
+	std::vector<std::string> oplist;
+	std::set<std::string> opset;
+	TestSet * tests = ((CTest &)tspace.get_project()).malloc_test_set();
+
+	/* initialize oplist */
+	auto beg = data.get_subsuming_operators().begin();
+	auto end = data.get_subsuming_operators().end();
+	while (beg != end) {
+		oplist.push_back(*(beg++));
+	}
+
+	out << "operator\tcoverage\tscore\n";
+	for (int i = 0; i < oplist.size(); i++) {
+		const std::string & op = oplist[i];
+		opset.clear(); opset.insert(op);
+
+		out << op << "\t";
+		/* output its coverage and dominator score */
+		this->gen_cov_score(data, opset, out, *tests);
+	}
+
+	/* return */
 	((CTest &)tspace.get_project()).delete_test_set(tests);
 }
 
@@ -993,7 +1022,7 @@ bool is_trap_mutant(Mutant & mutant) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "mid";
+	std::string prname = "triangle";
 	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
@@ -1033,7 +1062,7 @@ int main() {
 
 		// compute the subsumption graph
 		MSGraph graph(mspace);
-		build_subsumption_graph(graph, producer, consumer, mspace, is_trap_mutant);
+		build_subsumption_graph(graph, producer, consumer);
 		std::cout << "Subsumption Graph: constructed finished...\n";
 
 		// output graph-file 
@@ -1060,22 +1089,22 @@ int main() {
 		}
 
 		// relevant object for MSG 
-		/*MuClusterSet clusters(graph);
+		MuClusterSet clusters(graph);
 		OpMutantMap operators(mspace);
 		OpClusterMap mappings(graph);
-		std::cout << "Environment building: finished...\n";*/
+		std::cout << "Environment building: finished...\n";
 
 		// extract subsuming operators
-		/*SOperatorSet sopset(clusters, mappings, operators);
-		std::cout << "Subsuming operators: extracted...\n";*/
+		SOperatorSet sopset(clusters, mappings, operators);
+		std::cout << "Subsuming operators: extracted...\n";
 
 		// output 
-		/*SuOprtWriter writer(ctest.get_space());
+		SuOprtWriter writer(ctest.get_space());
 		writer.open(root);
 		writer.write(sopset);
 		writer.eval_operators(sopset, alphas);
 		writer.close();
-		std::cout << "Output: finished...\n";*/
+		std::cout << "Output: finished...\n";
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";
