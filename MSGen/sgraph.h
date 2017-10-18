@@ -272,8 +272,17 @@ private:
 	bool directSubsumed_topdown(MSG_Node & x, const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & DS);
 	bool directSubsumed_downtop(MSG_Node & x, const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & DS);
 	bool directSubsumed_randomy(MSG_Node & x, const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & DS);
+	bool purify_subsumeds(std::set<MSG_Node *> & DS);
 
 	bool derive_roots(const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & roots);
 	bool derive_leafs(const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & leafs);
-	bool purify_subsumeds(std::set<MSG_Node *> & DS);
+	
+	bool available_topdown(MSG_Node &y, const std::set<MSG_Node *> & VS);
+	bool available_downtop(MSG_Node &y, const std::set<MSG_Node *> & VS);
+
+	/* remove nodes that subsume y from VS */
+	bool erase_subsuming(MSG_Node & y, std::set<MSG_Node *> & VS);
+	/* remove nodes that are subsumed by y from VS */
+	bool erase_subsumeds(MSG_Node & y, std::set<MSG_Node *> & VS);
+
 };

@@ -448,6 +448,8 @@ bool MSG_Build_Fast::clustering() {
 
 		consumer->consume(vec);
 	}
+
+	return true;
 }
 bool MSG_Build_Fast::rankByDegree(std::vector<std::set<MSG_Node *> *> & H) {
 	std::map<unsigned int, std::set<MSG_Node *> *> hmap;
@@ -478,6 +480,8 @@ bool MSG_Build_Fast::rankByDegree(std::vector<std::set<MSG_Node *> *> & H) {
 }
 bool MSG_Build_Fast::directSubsumed(MSG_Node & x, const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & DS) {
 	return directSubsumed_topdown(x, VS, DS);
+	//return directSubsumed_downtop(x, VS, DS);
+	//return directSubsumed_randomy(x, VS, DS);
 }
 bool MSG_Build_Fast::construct() {
 	// step1. clustering 
@@ -490,7 +494,7 @@ bool MSG_Build_Fast::construct() {
 	// step3. linking from H[n] to H[1]
 	std::set<MSG_Node *> base, * DS;
 	std::map<MSG_Node *, std::set<MSG_Node *> *> ans;
-	for (int k = H.size(); k >= 0; k--) {
+	for (int k = H.size() - 1; k >= 0; k--) {
 		/* get H[k] */
 		std::set<MSG_Node *> & level = *(H[k]);
 
@@ -500,7 +504,8 @@ bool MSG_Build_Fast::construct() {
 			/* get the nodes in DS */
 			MSG_Node & x = *(*(beg++));
 			DS = new std::set<MSG_Node *>();
-			directSubsumed(x, base, *DS); ans[&x] = DS;
+			directSubsumed(x, base, *DS); 
+			ans[&x] = DS;
 		}
 
 		/* update the nodes and edges "in" DMSG */
@@ -527,7 +532,7 @@ bool MSG_Build_Fast::construct() {
 	}
 
 	// step4. end and delete resources.
-	base.clear(); H.clear();
+	base.clear(); H.clear(); return true;
 }
 
 bool MSG_Build_Fast::derive_roots(const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & roots) {
@@ -575,9 +580,19 @@ bool MSG_Build_Fast::purify_subsumeds(std::set<MSG_Node *> & DS) {
 	return true;
 }
 
-bool MSG_Build_Fast::directSubsumed_topdown(MSG_Node & x, const std::set<MSG_Node *> & VS, std::set<MSG_Node *> & DS) {
+bool MSG_Build_Fast::available_topdown(MSG_Node & y, const std::set<MSG_Node *> & VS) {
+	const MSG_Port & port = y.get_in_port();
+	for (int i = 0; i < port.degree(); i++) {
+		MSG_Edge & edge = port.get_edge(i);
+		MSG_Node & prev = edge.get_source();
+		if (VS.count(&prev) > 0) return false;
+	}
+	return true;
+}
+bool MSG_Build_Fast::directSubsumed_topdown(MSG_Node & x, const std::set<MSG_Node *> & base, std::set<MSG_Node *> & DS) {
 	/* get the roots in current DMSG set VS */
-	std::set<MSG_Node *> roots; derive_roots(VS, roots);
+	std::set<MSG_Node *> roots; 
+	derive_roots(base, roots);
 
 	/* initialize the sequence to access nodes in VS */
 	std::queue<MSG_Node *> queue;
@@ -590,11 +605,166 @@ bool MSG_Build_Fast::directSubsumed_topdown(MSG_Node & x, const std::set<MSG_Nod
 
 	/* iterate */
 	DS.clear();
+	std::set<MSG_Node *> VS(base);
 	while (!queue.empty()) {
 		/* get next accessible node */
-		MSG_Node & y = *(queue.front()); queue.pop(); 
+		MSG_Node & y = *(queue.front()); 
+		queue.pop();
 
-		// TODO ...
+		/* update the visit space */
+		if (VS.count(&y) == 0) 
+			continue;
+		else VS.erase(&y); 
+		
+		/* x > y */
+		if (subsume(x, y)) {
+			DS.insert(&y);
+			/* erase children for one-level (performance) */
+			const MSG_Port & port = y.get_ou_port();
+			for (int i = 0; i < port.degree(); i++) {
+				MSG_Edge & edge = port.get_edge(i);
+				MSG_Node & next = edge.get_target();
+				VS.erase(&next);
+			}
+		}
+		else {
+			/* push children */
+			const MSG_Port & port = y.get_ou_port();
+			for (int i = 0; i < port.degree(); i++) {
+				MSG_Edge & edge = port.get_edge(i);
+				MSG_Node & next = edge.get_target();
+				if (records.count(&next) == 0
+					&& VS.count(&next) > 0
+					&& available_topdown(next, VS)) {
+					records.insert(&next);
+					queue.push(&next);
+				}
+			}
+		}
+	}
+
+	/* purify DS */ return purify_subsumeds(DS);
+}
+bool MSG_Build_Fast::available_downtop(MSG_Node & y, const std::set<MSG_Node *> & VS) {
+	const MSG_Port & port = y.get_ou_port();
+	for (int i = 0; i < port.degree(); i++) {
+		MSG_Edge & edge = port.get_edge(i);
+		MSG_Node & next = edge.get_target();
+		if (VS.count(&next) > 0) return false;
+	}
+	return true;
+}
+bool MSG_Build_Fast::directSubsumed_downtop(MSG_Node & x, const std::set<MSG_Node *> & base, std::set<MSG_Node *> & DS) {
+	/* get the leafs in current DMSG set VS */
+	std::set<MSG_Node *> leafs;
+	derive_leafs(base, leafs);
+
+	/* initialize the sequence to access nodes in VS */
+	std::queue<MSG_Node *> queue;
+	std::set<MSG_Node *> records;
+	auto beg = leafs.begin(), end = leafs.end();
+	while (beg != end) {
+		queue.push(*(beg));
+		records.insert(*(beg++));
+	}
+
+	/* iterate */
+	DS.clear();
+	std::set<MSG_Node *> VS(base);
+	while (!queue.empty()) {
+		/* get next accessible node */
+		MSG_Node & y = *(queue.front());
+		queue.pop();
+
+		/* update the visit space */
+		if (VS.count(&y) == 0) continue;
+		else VS.erase(&y);
+
+		/* x > y */
+		if (subsume(x, y)) {
+			DS.insert(&y);
+			/* push children */
+			const MSG_Port & port = y.get_in_port();
+			for (int i = 0; i < port.degree(); i++) {
+				MSG_Edge & edge = port.get_edge(i);
+				MSG_Node & prev = edge.get_source();
+				if (records.count(&prev) == 0
+					&& VS.count(&prev) > 0
+					&& available_downtop(prev, VS)) {
+					records.insert(&prev);
+					queue.push(&prev);
+				}
+			}
+		}
+		else {
+			const MSG_Port & port = y.get_in_port();
+			for (int i = 0; i < port.degree(); i++) {
+				MSG_Edge & edge = port.get_edge(i);
+				MSG_Node & prev = edge.get_source();
+				VS.erase(&prev);
+			}
+		}
+	}
+
+	/* purify DS */ return purify_subsumeds(DS);
+}
+bool MSG_Build_Fast::erase_subsuming(MSG_Node & y, std::set<MSG_Node *> & VS) {
+	std::queue<MSG_Node *> queue; 
+	std::set<MSG_Node *> records;
+	queue.push(&y); records.insert(&y);
+
+	while (!queue.empty()) {
+		MSG_Node & next = *(queue.front());
+		queue.pop(); VS.erase(&next);
+
+		const MSG_Port & port = y.get_in_port();
+		for (int i = 0; i < port.degree(); i++) {
+			MSG_Edge & edge = port.get_edge(i);
+			MSG_Node & prev = edge.get_source();
+			if (records.count(&prev) == 0
+				&& VS.count(&prev) > 0) {
+				queue.push(&prev);
+				records.insert(&prev);
+			}
+		}
+	}
+
+	return true;
+}
+bool MSG_Build_Fast::erase_subsumeds(MSG_Node & y, std::set<MSG_Node *> & VS) {
+	std::queue<MSG_Node *> queue;
+	queue.push(&y); 
+
+	while (!queue.empty()) {
+		MSG_Node & next = *(queue.front());
+		queue.pop(); 
+
+		const MSG_Port & port = y.get_ou_port();
+		for (int i = 0; i < port.degree(); i++) {
+			MSG_Edge & edge = port.get_edge(i);
+			MSG_Node & next = edge.get_target();
+			if (VS.count(&next) > 0) {
+				queue.push(&next);
+				VS.erase(&next);
+			}
+		}
+	}
+
+	return true;
+}
+bool MSG_Build_Fast::directSubsumed_randomy(MSG_Node & x, const std::set<MSG_Node *> & base, std::set<MSG_Node *> & DS) {
+	std::set<MSG_Node *> VS(base);
+
+	DS.clear();
+	while (!VS.empty()) {
+		MSG_Node & y = *(*(VS.begin()));
+		VS.erase(&y);
+
+		if (subsume(x, y)) {
+			DS.insert(&y);
+			erase_subsumeds(y, VS);
+		}
+		else erase_subsuming(y, VS);
 	}
 
 	/* purify DS */ return purify_subsumeds(DS);
@@ -637,7 +807,8 @@ static void print_ms_graph(const MS_Graph & graph, std::ostream & out) {
 /* build up MSG */
 static void build_up_graph(MS_Graph & graph, ScoreProducer & producer, ScoreConsumer & consumer) {
 	time_t start, end;
-	MSG_Build & builder = *(new MSG_Build_Classical(graph));
+	//MSG_Build & builder = *(new MSG_Build_Classical(graph));
+	MSG_Build & builder = *(new MSG_Build_Fast(graph));
 	builder.open(producer, consumer);
 	start = time(nullptr);
 	builder.build();
@@ -647,13 +818,11 @@ static void build_up_graph(MS_Graph & graph, ScoreProducer & producer, ScoreCons
 	std::cout << "\tUsing time: " << difftime(end, start) << " seconds...\n";
 }
 
-
-
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "Calendar";
-	TestType ttype = TestType::general;
+	std::string prname = "schedule";
+	TestType ttype = TestType::schedule;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
