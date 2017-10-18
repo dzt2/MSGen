@@ -121,6 +121,7 @@
     <ClInclude Include="ctext.h" />
     <ClInclude Include="ctrace.h" />
     <ClInclude Include="mgraph.h" />
+    <ClInclude Include="sgraph.h" />
     <ClInclude Include="suoprt.h" />
   </ItemGroup>
   <ItemGroup>
@@ -136,6 +137,7 @@
     <ClCompile Include="ctrace.cpp" />
     <ClCompile Include="gentest.cpp" />
     <ClCompile Include="mgraph.cpp" />
+    <ClCompile Include="sgraph.cpp" />
     <ClCompile Include="suoprt.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

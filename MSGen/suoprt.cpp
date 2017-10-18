@@ -1005,7 +1005,7 @@ static void build_subsumption_graph(MSGraph & graph,
 
 		/* delete vector */ consumer.consume(vec);
 	}
-	builder.link(); builder.close();
+	builder.link(MSGLinker::down_top); builder.close();
 
 	/* return */ return;
 }
@@ -1018,12 +1018,39 @@ bool is_trap_mutant(Mutant & mutant) {
 	else return false;
 }
 
+/* output methods */
+static void print_graph(const MSGraph & graph, std::ostream & out) {
+	int C = graph.size();
+	int H = graph.get_hierarchy().size_of_degress();
+
+	int S = 0;
+	for (int i = 0; i < C; i++) {
+		MuCluster & cluster = graph.get_cluster(i);
+		S += cluster.get_ou_port().get_degree();
+	}
+
+	int N = 0, count = 0, Hi;
+	const MuHierarchy & list = graph.get_hierarchy();
+	for (int i = 0; i < H; i++) {
+		Hi = list.get_clusters_at(i).size();
+		N = N + Hi * count;
+		count = count + Hi;
+	}
+
+	out << "------ Mutant Subsumption Structure ----\n";
+	out << "\t#Clusters: " << C << "\n";
+	out << "\t#Hierarch: " << H << "\n";
+	out << "\t#Subsumes: " << S << "\n";
+	out << "\tLower-bound: " << N << "\n";
+	out << std::endl;
+}
+
 /* test */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "triangle";
-	TestType ttype = TestType::general;
+	std::string prname = "tot_info";
+	TestType ttype = TestType::tot_info;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -1073,9 +1100,9 @@ int main() {
 			if (child->get_local_name() == "analysis") {
 				target = child; break;
 			}
-		}
+		} 
 
-		/* write information */
+		// write information
 		if (target == nullptr) {
 			CError error(CErrorType::Runtime, 
 				"main()", "Invalid project: no analysis directory");
@@ -1106,6 +1133,8 @@ int main() {
 		writer.close();
 		std::cout << "Output: finished...\n";
 
+		print_graph(graph, std::cout);
+
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";
 	}
@@ -1115,5 +1144,5 @@ int main() {
 	delete &cmutant; delete &ctest;
 	delete &program; delete &root;
 
-	/* exit */ std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
+	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }

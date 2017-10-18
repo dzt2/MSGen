@@ -286,7 +286,6 @@ protected:
 	void write_mutant_graph(MSGraph &, std::ostream &);
 };
 
-
 /* visit space for sub-graph in MSG */
 class _MSG_VSpace {
 public:
