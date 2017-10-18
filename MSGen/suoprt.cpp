@@ -1,4 +1,5 @@
 #include "suoprt.h"
+#include <time.h>
 
 MuClusterSet::MuClusterSet(const MSGraph & g) : graph(g) {
 	/* compute equivalent cluster */
@@ -972,15 +973,20 @@ static void build_subsumption_graph(MSGraph & graph,
 	/* declarations */
 	ScoreVector * vec;
 	MSGBuilder builder;
+	time_t start, end;
 
 	/* compute subsumption graph */
 	builder.open(graph);
+	start = time(nullptr);
 	while ((vec = producer.produce()) != nullptr) {
 		builder.add(vec->get_mutant(), vec->get_vector());
 		consumer.consume(vec);
 	}
-	builder.link(MSGLinker::randomly);
+	builder.link(MSGLinker::down_top);
+	end = time(nullptr);
 	builder.close();
+
+	std::cout << "\tUsing time: " << difftime(start, end) << " seconds.\n";
 
 	/* end */ return;
 }
@@ -1046,11 +1052,12 @@ static void print_graph(const MSGraph & graph, std::ostream & out) {
 }
 
 /* test */
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "tot_info";
-	TestType ttype = TestType::tot_info;
+	std::string prname = "tcas";
+	TestType ttype = TestType::tcas;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -1132,7 +1139,7 @@ int main() {
 		writer.eval_operators(sopset, alphas);
 		writer.close();
 		std::cout << "Output: finished...\n";
-
+		
 		print_graph(graph, std::cout);
 
 		// end this file
@@ -1146,3 +1153,4 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/
