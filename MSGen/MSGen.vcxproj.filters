@@ -116,5 +116,8 @@
     <ClCompile Include="sgraph.cpp">
       <Filter>Source Files\graph</Filter>
     </ClCompile>
+    <ClCompile Include="msgtest.cpp">
+      <Filter>Source Files\driver</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

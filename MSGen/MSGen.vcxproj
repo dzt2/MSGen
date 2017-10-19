@@ -137,6 +137,7 @@
     <ClCompile Include="ctrace.cpp" />
     <ClCompile Include="gentest.cpp" />
     <ClCompile Include="mgraph.cpp" />
+    <ClCompile Include="msgtest.cpp" />
     <ClCompile Include="sgraph.cpp" />
     <ClCompile Include="suoprt.cpp" />
   </ItemGroup>
