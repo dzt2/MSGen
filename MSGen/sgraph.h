@@ -286,3 +286,54 @@ private:
 	bool erase_subsumeds(MSG_Node & y, std::set<MSG_Node *> & VS);
 
 };
+/* (very) fast algorithm implement: this will update MSG */
+class MSG_Build_Quick : public MSG_Build {
+public:
+	MSG_Build_Quick(MS_Graph & g) : MSG_Build(g), clusters() {}
+	/* deconstructor */
+	~MSG_Build_Quick() { clusters.clear(); }
+
+protected:
+	/* construct the graph */
+	bool construct();
+
+	/* clustering indistinguishable mutants and create nodes */
+	bool clustering();
+	/* linking clusters by classical strategy */
+	bool linking();
+
+private:
+	/* clusters in graph */
+	std::set<MSG_Node *> clusters;
+
+	/* build up local MSG for subset of clusters */
+	bool build_up(const std::set<MSG_Node *> &);
+
+	/* classify the nodes in C to three groups
+		1) S : those subsumes I;
+		2) D : those subsumed by I;
+		3) N : those not subsuming and not subsumed by I.
+	*/
+	bool classify(const std::set<MSG_Node *> & C, 
+		MSG_Node & I, std::set<MSG_Node *> & S, 
+		std::set<MSG_Node *> & D, std::set<MSG_Node *> & N);
+	/* derive roots and leafs in given node set */
+	bool derive_roots_leafs(const std::set<MSG_Node *> & nodes,
+		std::set<MSG_Node *> & roots, std::set<MSG_Node *> & leafs);
+	/* combine A to B by giving A's leafs and B's roots 
+		1) DS: direct subsumption from node in A to those in B
+	*/
+	bool combine_LR(const std::set<MSG_Node *> & aleafs, 
+		const std::set<MSG_Node *> & broots, 
+		std::map<MSG_Node *, std::set<MSG_Node *> *> & DS);
+
+	/* whether the next node can be accessed given its visited records */
+	bool topdown_ready(MSG_Node & next, const std::set<MSG_Node *> & visits);
+	/* derive nodes directly subsumed by source in graph without considering its self-subsumption or by its existing children */
+	bool derive_direct_subsumed(MSG_Node & source, const std::set<MSG_Node *> &troots, std::set<MSG_Node *> & DS);
+	/* update the directly subsumed ones to the true answers */
+	bool update_direct_subsumed(MSG_Node & source, std::set<MSG_Node *> & DS);
+	/* delete those in DS that are subsumed by another one in DS */
+	bool purify_direct_subsumed(std::set<MSG_Node *> & DS);
+
+};
