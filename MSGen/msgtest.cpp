@@ -1,4 +1,4 @@
-#include "sgraph.h"
+#include "mclass.h"
 #include <time.h>
 
 typedef std::string MClass;
@@ -27,8 +27,8 @@ static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 static void build_up_graph(MS_Graph & graph, ScoreProducer & producer, ScoreConsumer & consumer) {
 	time_t start, end;
 	//MSG_Build & builder = *(new MSG_Build_Classical(graph));
-	//MSG_Build & builder = *(new MSG_Build_Fast(graph));
-	MSG_Build & builder = *(new MSG_Build_Quick(graph));
+	MSG_Build & builder = *(new MSG_Build_Fast(graph));
+	//MSG_Build & builder = *(new MSG_Build_Quick(graph));
 	builder.open(producer, consumer);
 	start = time(nullptr);
 	builder.build();
@@ -42,11 +42,20 @@ static void print_ms_graph(const MS_Graph & graph, std::ostream & out) {
 	// output structure summary
 	int C = graph.size(), S = 0, E = 0;
 	int M = graph.size_of_mutants();
+	int minouts = 0, maxouts = 0;
 	for (int k = 0; k < C; k++) {
 		MSG_Node & node = graph.get_node(k);
 		S += node.get_ou_port().degree();
 		if (node.get_score_degree() == 0)
 			E = node.get_mutants().number_of_mutants();
+		else {
+			minouts += (1 + node.get_ou_port().degree())
+				* node.get_mutants().number_of_mutants();
+			maxouts += (
+				node.get_mutants().number_of_mutants() - 1
+				+ node.get_ou_port().degree())
+				* node.get_mutants().number_of_mutants();
+		}
 	}
 	int R = (M - E) * (M - E) - M;
 	out << "---------- Summary ----------\n";
@@ -76,47 +85,73 @@ static void print_ms_graph(const MS_Graph & graph, std::ostream & out) {
 	// output direct subsumption
 	double drate = ((double)(S - EDR)) / ((double)R);
 	out << "\tDirectSub: " << (S - EDR) << " (" << drate << ")\n";
+	int avg_min_outs = round(((double)minouts) / ((double)M));
+	int avg_max_outs = round(((double)maxouts) / ((double)M));
+	double min_outs_dens = ((double)avg_min_outs) / ((double)M);
+	double max_outs_dens = ((double)avg_max_outs) / ((double)M);
+	out << "\tMin-Outs: " << avg_min_outs << "/" << M << " (" << min_outs_dens << ")\n";
+	out << "\tMax-Outs: " << avg_max_outs << "/" << M << " (" << max_outs_dens << ")\n";
 	out << "-----------------------------\n\n";
 
 	// output eof
 	out << std::endl;
 }
 
-// analysis process
-/* whether the mutant is equivalent */
-static bool is_equivalent_mutant(Mutant::ID i, const MS_Graph & graph) {
-	if (graph.has_node_of(i)) {
-		MSG_Node & node = graph.get_node_of(i);
-		return node.get_score_degree() == 0;
+/* classify by operator */
+void classify_by_operators(MutantSpace & space, std::map<Mutant::ID, MType> & typelib) {
+	typelib.clear();
+	Mutant::ID mid, n = space.number_of_mutants();
+	for (mid = 0; mid < n; mid++) {
+		Mutant & mutant = space.get_mutant(mid);
+		typelib[mutant.get_id()] = mutant.get_operator();
 	}
-	else return false;
 }
-/* whether the mi and mj are indistinguishable */
-static bool indistinguishable(Mutant::ID i, Mutant::ID j, const MS_Graph & graph) {
-	if (graph.has_node_of(i)) {
-		if (graph.has_node_of(j)) {
-			MSG_Node & mi = graph.get_node_of(i);
-			MSG_Node & mj = graph.get_node_of(j);
-			return (&mi) == (&mj);
+
+/* classify graph */
+void classify_graph(const MS_Graph & source, MS_C_Graph & target, const std::map<Mutant::ID, MType> & typelib) {
+	MS_C_Build builder;
+	builder.open(typelib);
+	builder.classify(source, target);
+	builder.close();
+}
+/* print classify graph */
+void print_classify_graph(const MS_C_Graph & graph, std::ostream & out) {
+	std::map<std::string, unsigned> ans;
+
+	MS_C_Node::ID cid, n = graph.size(), e = 0;
+	for (cid = 0; cid < n; cid++) {
+		MS_C_Node & x = graph.get_node(cid);
+		
+		const std::set<MS_C_Node *> & nexts = x.get_next_nodes();
+		auto beg = nexts.begin(), end = nexts.end();
+		while (beg != end) {
+			MS_C_Node & y = *(*(beg++));
+
+			std::string key = x.get_type() + "\t" + y.get_type();
+			if (y.is_linked_to(x)) {
+				key = key + "\tEQ"; e += 2;
+			}
+			else { key = key + "\tDR"; e++; }
+
+			if (ans.count(key) == 0) ans[key] = 0;
+			auto iter = ans.find(key);
+			ans[key] = (iter->second) + 1;
 		}
-		else return false;
 	}
-	else return false;
+
+	int total = n * (n - 1);
+	out << "\tC-Nodes: " << n << "\n";
+	out << "\tC-Edges: " << e << "/" << n * (n - 1) << "\n";
+	out << "\tC-Dense: " << ((double)e) / ((double)total) << "\n";
+	out << std::endl;
 }
 
-/* relation of mutants' operators */
-MClass relation_of_operators(Mutant::ID i, Mutant::ID j, MutantSpace & space) {
-	Mutant & mi = space.get_mutant(i);
-	Mutant & mj = space.get_mutant(j);
-	return "(" + mi.get_operator() 
-		+ ", " + mj.get_operator() + ")";
-}
-
+/* test method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "Day";
-	TestType ttype = TestType::general;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -153,6 +188,12 @@ int main() {
 
 		// print graph
 		print_ms_graph(graph, std::cout);
+
+		/*MS_C_Graph cgraph;
+		std::map<Mutant::ID, MType> typelib;
+		classify_by_operators(mspace, typelib);
+		classify_graph(graph, cgraph, typelib);
+		print_classify_graph(cgraph, std::cout);*/
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";

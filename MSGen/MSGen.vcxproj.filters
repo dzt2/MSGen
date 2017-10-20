@@ -72,6 +72,9 @@
     <ClInclude Include="sgraph.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
+    <ClInclude Include="mclass.h">
+      <Filter>Header Files\graph</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp">
@@ -118,6 +121,9 @@
     </ClCompile>
     <ClCompile Include="msgtest.cpp">
       <Filter>Source Files\driver</Filter>
+    </ClCompile>
+    <ClCompile Include="mclass.cpp">
+      <Filter>Source Files\graph</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
