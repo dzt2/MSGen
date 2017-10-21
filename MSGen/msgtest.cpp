@@ -107,43 +107,72 @@ void classify_by_operators(MutantSpace & space, std::map<Mutant::ID, MType> & ty
 		typelib[mutant.get_id()] = mutant.get_operator();
 	}
 }
+/* classify by functions */
+void classify_by_functions(MutantSpace & space, const CFunctionSpace & funcs, std::map<Mutant::ID, MType> & typelib) {
+	typelib.clear(); std::string funcname;
+	Mutant::ID mid, n = space.number_of_mutants();
+	for (mid = 0; mid < n; mid++) {
+		/* get the mutant's location */
+		Mutant & mutant = space.get_mutant(mid);
+		const Mutation & mutation = mutant.
+			get_mutation(mutant.get_orders() - 1);
+		const CodeLocation & loc = mutation.get_location();
+
+		if (funcs.find_function_at(loc.get_bias(), funcname))
+			typelib[mid] = funcname;
+		//else typelib[mid] = "unknown";
+	}
+}
 
 /* classify graph */
-void classify_graph(const MS_Graph & source, MS_C_Graph & target, const std::map<Mutant::ID, MType> & typelib) {
+static void classify_graph(const MS_Graph & source, MS_C_Graph & target, const std::map<Mutant::ID, MType> & typelib) {
 	MS_C_Build builder;
 	builder.open(typelib);
 	builder.classify(source, target);
 	builder.close();
 }
 /* print classify graph */
-void print_classify_graph(const MS_C_Graph & graph, std::ostream & out) {
-	std::map<std::string, unsigned> ans;
+static void print_classify_graph(const MS_C_Graph & graph, std::ostream & out) {
+	// for counters 
+	size_t inner_eqs = 0, inter_eqs = 0;
+	size_t inner_dss = 0, inter_dss = 0;
+	size_t mutants = 0;
 
-	MS_C_Node::ID cid, n = graph.size(), e = 0;
+	MS_C_Node::ID cid, n = graph.size();
 	for (cid = 0; cid < n; cid++) {
 		MS_C_Node & x = graph.get_node(cid);
-		
+		size_t x_mutants = x.number_of_mutants();
+		inner_eqs += x_mutants * (x_mutants - 1) ;
+		mutants += x_mutants;
+
 		const std::set<MS_C_Node *> & nexts = x.get_next_nodes();
 		auto beg = nexts.begin(), end = nexts.end();
 		while (beg != end) {
 			MS_C_Node & y = *(*(beg++));
+			size_t y_mutants = y.number_of_mutants();
 
-			std::string key = x.get_type() + "\t" + y.get_type();
+			// equivalence between types 
 			if (y.is_linked_to(x)) {
-				key = key + "\tEQ"; e += 2;
+				if (x.get_type() == y.get_type()) {
+					std::cout << "\t\t[error]Impossible case: " << x.get_type() << "\n";
+					throw "error";
+				}
+				else inter_eqs += x_mutants * y_mutants;
 			}
-			else { key = key + "\tDR"; e++; }
-
-			if (ans.count(key) == 0) ans[key] = 0;
-			auto iter = ans.find(key);
-			ans[key] = (iter->second) + 1;
+			// direct subsumption 
+			else {
+				if(x.get_type() == y.get_type())
+					inner_dss ++;
+				else inter_dss ++;
+			}
 		}
 	}
 
-	int total = n * (n - 1);
-	out << "\tC-Nodes: " << n << "\n";
-	out << "\tC-Edges: " << e << "/" << n * (n - 1) << "\n";
-	out << "\tC-Dense: " << ((double)e) / ((double)total) << "\n";
+	out << "\tC-Mutants: " << mutants << "\n";
+	out << "\tC-Inner-EQ: " << inner_eqs << "/" << (inner_eqs + inter_eqs) << " (" << ((double)inner_eqs) / ((double)(inner_eqs + inter_eqs)) << ")\n";
+	out << "\tC-Inter-EQ: " << inter_eqs << "/" << (inner_eqs + inter_eqs) << " (" << ((double)inter_eqs) / ((double)(inner_eqs + inter_eqs)) << ")\n";
+	out << "\tC-Inner-DS: " << inner_dss << "/" << (inner_dss + inter_dss) << " (" << ((double)inner_dss) / ((double)(inner_dss + inter_dss)) << ")\n";
+	out << "\tC-Inter-DS: " << inter_dss << "/" << (inner_dss + inter_dss) << " (" << ((double)inter_dss) / ((double)(inner_dss + inter_dss)) << ")\n";
 	out << std::endl;
 }
 
@@ -151,8 +180,8 @@ void print_classify_graph(const MS_C_Graph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "tot_info";
-	TestType ttype = TestType::tot_info;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -189,11 +218,10 @@ int main() {
 			if (beg != end) std::cout << "; ";
 		}
 		std::cout << "}\n";
-
 		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
 
 		/* print function body (test) */
-		std::cout << "---------- functions ----------\n";
+		/*std::cout << "---------- functions ----------\n";
 		beg = funcnames.begin(), end = funcnames.end();
 		while (beg != end) {
 			const CFunction & func = funcspace.get_function(*(beg++));
@@ -203,7 +231,7 @@ int main() {
 				std::cout << loc.get_text_at() << "\n\n";
 			}
 		}
-		std::cout << "-------------------------------\n";
+		std::cout << "-------------------------------\n"; */
 
 		// get score vector producer | consumer
 		ScoreSource & score_src = cscore.get_source(cfile);
@@ -217,11 +245,11 @@ int main() {
 		// print graph
 		print_ms_graph(graph, std::cout);
 
-		/*MS_C_Graph cgraph;
+		MS_C_Graph cgraph;
 		std::map<Mutant::ID, MType> typelib;
-		classify_by_operators(mspace, typelib);
+		classify_by_functions(mspace, funcspace, typelib);
 		classify_graph(graph, cgraph, typelib);
-		print_classify_graph(cgraph, std::cout);*/
+		print_classify_graph(cgraph, std::cout);
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";
