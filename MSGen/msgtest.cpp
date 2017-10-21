@@ -124,6 +124,16 @@ void classify_by_functions(MutantSpace & space, const CFunctionSpace & funcs, st
 	}
 }
 
+/* trim the line-space */
+static void trim_spaces(std::string & line) {
+	std::string cache; char ch;
+	for (int i = 0; i < line.length(); i++) {
+		ch = line[i];
+		if (ch != '\n') cache += ch;
+	}
+	line = cache;
+}
+
 /* classify graph */
 static void classify_graph(const MS_Graph & source, MS_C_Graph & target, const std::map<Mutant::ID, MType> & typelib) {
 	MS_C_Build builder;
@@ -175,13 +185,44 @@ static void print_classify_graph(const MS_C_Graph & graph, std::ostream & out) {
 	out << "\tC-Inter-DS: " << inter_dss << "/" << (inner_dss + inter_dss) << " (" << ((double)inter_dss) / ((double)(inner_dss + inter_dss)) << ")\n";
 	out << std::endl;
 }
+/* print inter-type equivalence */
+static void print_ms_graph(const MS_Graph & graph, 
+	const std::map<Mutant::ID, MType> & typelib, std::ostream & out) {
+	out << "mid\tcid\toperator\ttype\tline\torigin\treplace\n";
+
+	MutantSpace & space = graph.get_space();
+	const TextBuild & txt = *(space.get_code_file().get_text());
+
+	Mutant::ID n = space.number_of_mutants();
+	for (Mutant::ID mid = 0; mid < n; mid++) {
+		Mutant & mutant = space.get_mutant(mid);
+		if (graph.has_node_of(mid)) {
+			MSG_Node & node = graph.get_node_of(mid);
+			if (node.get_score_degree() == 0) continue;
+			auto iter = typelib.find(mid);
+
+			const Mutation & mutation = mutant.
+				get_mutation(mutant.get_orders() - 1);
+			const CodeLocation & loc = mutation.get_location();
+			std::string origin = loc.get_text_at();
+			std::string replace = mutation.get_replacement();
+			trim_spaces(origin); trim_spaces(replace);
+
+			out << mid << "\t" << node.get_node_id() << "\t";
+			out << mutant.get_operator() << "\t" << iter->second;
+			out << "\t" << txt.lineOfIndex(loc.get_bias());
+			out << "\t" << origin << "\t" << replace << "\n";
+		}
+	}
+
+}
 
 /* test method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
-	TestType ttype = TestType::replace;
+	std::string prname = "tot_info";
+	TestType ttype = TestType::tot_info;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -250,6 +291,10 @@ int main() {
 		classify_by_functions(mspace, funcspace, typelib);
 		classify_graph(graph, cgraph, typelib);
 		print_classify_graph(cgraph, std::cout);
+
+		// output equivalence
+		std::ofstream fout(root.get_path() + "/analysis/mutants.txt");
+		print_ms_graph(graph, typelib, fout); fout.close();
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";
