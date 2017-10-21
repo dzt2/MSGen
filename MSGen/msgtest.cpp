@@ -1,4 +1,5 @@
 #include "mclass.h"
+#include "cfunc.h"
 #include <time.h>
 
 typedef std::string MClass;
@@ -150,14 +151,15 @@ void print_classify_graph(const MS_C_Graph & graph, std::ostream & out) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
-	TestType ttype = TestType::replace;
+	std::string prname = "tot_info";
+	TestType ttype = TestType::tot_info;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
 
 	// create code-project, mutant-project, test-project
 	CProgram & program = *(new CProgram(root));
+	CFuncProject & funcs = *(new CFuncProject(root));
 	CTest & ctest = *(new CTest(ttype, root, program.get_exec()));
 	CMutant & cmutant = *(new CMutant(root, program.get_source()));
 	CScore & cscore = *(new CScore(root, cmutant, ctest));
@@ -175,7 +177,33 @@ int main() {
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
 		MutantSet & mutants = *(mspace.create_set()); mutants.complement();
 		TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+		funcs.load_functions_for(cfile);
+		CFunctionSpace & funcspace = funcs.get_function_space(cfile);
+		
+		// head information
+		std::cout << "Load functions:\n\t{";
+		const std::set<std::string> & funcnames = funcspace.get_function_names();
+		auto beg = funcnames.begin(), end = funcnames.end();
+		while (beg != end) {
+			std::cout << *(beg++);
+			if (beg != end) std::cout << "; ";
+		}
+		std::cout << "}\n";
+
 		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
+
+		/* print function body (test) */
+		std::cout << "---------- functions ----------\n";
+		beg = funcnames.begin(), end = funcnames.end();
+		while (beg != end) {
+			const CFunction & func = funcspace.get_function(*(beg++));
+			if (func.is_defined()) {
+				const CodeLocation & loc = func.get_definition_point();
+				std::cout << "\n@" << func.get_name() << "\n";
+				std::cout << loc.get_text_at() << "\n\n";
+			}
+		}
+		std::cout << "-------------------------------\n";
 
 		// get score vector producer | consumer
 		ScoreSource & score_src = cscore.get_source(cfile);
@@ -200,7 +228,7 @@ int main() {
 	}
 
 	// delete memory
-	delete &cscore;
+	delete &cscore; delete &funcs;
 	delete &cmutant; delete &ctest;
 	delete &program; delete &root;
 

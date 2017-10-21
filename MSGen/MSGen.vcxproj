@@ -114,6 +114,7 @@
     <ClInclude Include="bitseq.h" />
     <ClInclude Include="cerror.h" />
     <ClInclude Include="cfile.h" />
+    <ClInclude Include="cfunc.h" />
     <ClInclude Include="cmutant.h" />
     <ClInclude Include="cscore.h" />
     <ClInclude Include="cscript.h" />
@@ -129,6 +130,7 @@
     <ClCompile Include="autotest.cpp" />
     <ClCompile Include="bitseq.cpp" />
     <ClCompile Include="cfile.cpp" />
+    <ClCompile Include="cfunc.cpp" />
     <ClCompile Include="cmutant.cpp" />
     <ClCompile Include="covmut.cpp" />
     <ClCompile Include="cscore.cpp" />

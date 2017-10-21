@@ -75,6 +75,9 @@
     <ClInclude Include="mclass.h">
       <Filter>Header Files\graph</Filter>
     </ClInclude>
+    <ClInclude Include="cfunc.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp">
@@ -124,6 +127,9 @@
     </ClCompile>
     <ClCompile Include="mclass.cpp">
       <Filter>Source Files\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="cfunc.cpp">
+      <Filter>Source Files\model</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
