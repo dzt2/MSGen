@@ -199,4 +199,3 @@ private:
 	CoverageSource * source;
 	CoverageLoader loader;
 };
-

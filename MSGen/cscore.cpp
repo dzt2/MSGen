@@ -154,9 +154,9 @@ ScoreSource & CScore::get_source(const CodeFile & cfile) const {
 	return *(iter->second);
 }
 
-ScoreProducer::ScoreProducer(const ScoreFunction & func)
+FileScoreProducer::FileScoreProducer(const ScoreFunction & func)
 	: function(func), reader(func.get_source().get_result_file().get_path()) {}
-ScoreVector * ScoreProducer::produce() {
+ScoreVector * FileScoreProducer::produce() {
 	/* declarations */
 	std::string linestr, numstr; char ch;
 	TestCase::ID tid; Mutant::ID mid;
@@ -213,6 +213,18 @@ ScoreVector * ScoreProducer::produce() {
 
 	/* return */ return ans;
 }
+ScoreVector * ScoreFilter::produce() {
+	ScoreVector * vec;
+	while ((vec = producer.produce()) != nullptr) {
+		if (vec->get_degree() == 0)			// filter equivalent 
+			continue;
+		else if (_template.count(vec->get_mutant()) == 0)	// filter unselected ones
+			continue;
+		else return vec;		// otherwise, return the vector
+	}
+	return nullptr;
+}
+
 
 CoverageVector * CoverageProducer::produce() {
 	if (beg >= end) return nullptr;

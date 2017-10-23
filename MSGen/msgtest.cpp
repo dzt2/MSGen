@@ -24,6 +24,40 @@ static void load_tests_mutants(CTest & ctest, CMutant & cmutant) {
 			" mutants for: " << cfile.get_file().get_path() << "\n" << std::endl;
 	}
 }
+/* select operators */
+static void select_operators(std::set<std::string> & operators) {
+	operators.clear();
+
+	/* E-selective set */
+	operators.insert("u-OLLN");
+	operators.insert("u-ORRN");
+	operators.insert("u-OAAN");
+	operators.insert("u-VDTR");
+	operators.insert("u-VTWD");
+	operators.insert("I-DirVarIncDec");
+	operators.insert("I-IndVarIncDec");
+
+	/* newly-subsuming ops */
+	operators.insert("u-ORAN");
+	operators.insert("u-OARN");
+	operators.insert("u-CRCR");
+	operators.insert("u-VLSR");
+	operators.insert("u-VGSR");
+}
+/* select mutants for analysis */
+static void select_mutants_by_operators(const MutantSpace & space,
+	const std::set<std::string> & operators, std::set<Mutant::ID> & mutants) {
+	// initialize 
+	mutants.clear();
+
+	// select mutants by operators
+	Mutant::ID mid, n = space.number_of_mutants();
+	for (mid = 0; mid < n; mid++) {
+		Mutant & mutant = space.get_mutant(mid);
+		if (operators.count(mutant.get_operator()) > 0) 
+			mutants.insert(mid);
+	}
+}
 /* build up MSG */
 static void build_up_graph(MS_Graph & graph, ScoreProducer & producer, ScoreConsumer & consumer) {
 	time_t start, end;
@@ -186,7 +220,7 @@ static void print_classify_graph(const MS_C_Graph & graph, std::ostream & out) {
 	out << std::endl;
 }
 /* print inter-type equivalence */
-static void print_ms_graph(const MS_Graph & graph, 
+static void print_mutants(const MS_Graph & graph, 
 	const std::map<Mutant::ID, MType> & typelib, std::ostream & out) {
 	out << "mid\tcid\toperator\ttype\tline\torigin\treplace\n";
 
@@ -216,13 +250,30 @@ static void print_ms_graph(const MS_Graph & graph,
 	}
 
 }
+/* print mutant subsumption graph */
+static void print_ms_edges(const MS_Graph & graph, std::ostream & out) {
+	out << "source\ttarget\n";
+	long mid, n = graph.size();
+	for (mid = 0; mid < n; mid++) {
+		MSG_Node & src = graph.get_node(mid);
+		const MSG_Port & port = src.get_ou_port();
+		for (int k = 0; k < port.degree(); k++) {
+			MSG_Edge & edge = port.get_edge(k);
+			MSG_Node & trg = edge.get_target();
+			out << src.get_node_id() << 
+				"\t" << trg.get_node_id() << "\n";
+		}
+	}
+	out << std::endl;
+}
+
 
 /* test method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "tot_info";
-	TestType ttype = TestType::tot_info;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -236,6 +287,10 @@ int main() {
 
 	// load mutants and tests
 	load_tests_mutants(ctest, cmutant);
+
+	// select mutation operators
+	std::set<std::string> operators;
+	select_operators(operators);
 
 	// load MSG
 	const CodeSpace & cspace = cmutant.get_code_space();
@@ -277,11 +332,17 @@ int main() {
 		// get score vector producer | consumer
 		ScoreSource & score_src = cscore.get_source(cfile);
 		ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
-		ScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+		FileScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
 
+		// select mutants
+		std::set<Mutant::ID> mutset;
+		select_mutants_by_operators(mspace, operators, mutset);
+		ScoreFilter filter(producer, mutset);
+		
 		// MS-Graph-Build
 		MS_Graph graph(mspace);
-		build_up_graph(graph, producer, consumer);
+		//build_up_graph(graph, producer, consumer);
+		build_up_graph(graph, filter, consumer);
 
 		// print graph
 		print_ms_graph(graph, std::cout);
@@ -294,7 +355,9 @@ int main() {
 
 		// output equivalence
 		std::ofstream fout(root.get_path() + "/analysis/mutants.txt");
-		print_ms_graph(graph, typelib, fout); fout.close();
+		print_mutants(graph, typelib, fout); fout.close();
+		std::ofstream eout(root.get_path() + "/analysis/graph.txt");
+		print_ms_edges(graph, eout); eout.close();
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";

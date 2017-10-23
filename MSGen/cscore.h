@@ -48,7 +48,7 @@ public:
 	BitSeq::size_t get_degree() const { return degree; }
 
 	/* create and kill-set */
-	friend class ScoreProducer;
+	friend class FileScoreProducer;
 	/* delete */
 	friend class ScoreConsumer;
 protected:
@@ -155,22 +155,14 @@ private:
 	std::map<const CodeFile *, ScoreSource *> sources;
 };
 
-/* to produce score vectors */
+/* to produce score vectors (abstract) */
 class ScoreProducer {
-public:
-	/* create a producer for score function */
-	ScoreProducer(const ScoreFunction &);
-	/* deconstructor */
-	~ScoreProducer() {}
-
-	/* get score function */
-	const ScoreFunction & get_function() const { return function; }
-	/* produce the next vector from score function's source: ../score/xxx.txt */
-	ScoreVector * produce();
-
 protected:
-	const ScoreFunction & function;
-	LineReader reader;
+	ScoreProducer() {}
+	virtual ~ScoreProducer() {}
+
+public:
+	virtual ScoreVector * produce() { return nullptr; }
 };
 /* consumer for score vectors */
 class ScoreConsumer {
@@ -192,6 +184,38 @@ public:
 	}
 protected:
 	const ScoreFunction * function;
+};
+
+/* produce score vectors from file */
+class FileScoreProducer : public ScoreProducer {
+public:
+	/* create a producer for score function */
+	FileScoreProducer(const ScoreFunction &);
+	/* deconstructor */
+	~FileScoreProducer() {}
+
+	/* get score function */
+	const ScoreFunction & get_function() const { return function; }
+	/* produce the next vector from score function's source: ../score/xxx.txt */
+	ScoreVector * produce();
+
+protected:
+	const ScoreFunction & function;
+	LineReader reader;
+};
+/* filter | select score vector for mutants */
+class ScoreFilter : public ScoreProducer {
+public:
+	ScoreFilter(ScoreProducer & prod, const std::set<Mutant::ID> & temp)
+		: producer(prod), _template(temp) {}
+	~ScoreFilter() {}
+
+	/* produce the next vector from score function's source: ../score/xxx.txt */
+	ScoreVector * produce();
+
+private:
+	ScoreProducer & producer;
+	const std::set<Mutant::ID> & _template;
 };
 
 /* vector to represent the coverage for each mutant */
