@@ -157,6 +157,17 @@ void classify_by_functions(MutantSpace & space, const CFunctionSpace & funcs, st
 		//else typelib[mid] = "unknown";
 	}
 }
+/* classify by coverage */
+void classify_by_coverage(MutantSpace & space, const MS_Graph & cgraph, std::map<Mutant::ID, MType> & typelib) {
+	typelib.clear();
+	Mutant::ID mid, n = space.number_of_mutants();
+	for (mid = 0; mid < n; mid++) {
+		if (cgraph.has_node_of(mid)) {
+			MSG_Node & cnode = cgraph.get_node_of(mid);
+			typelib[mid] = "" + cnode.get_node_id();
+		}
+	}
+}
 
 /* trim the line-space */
 static void trim_spaces(std::string & line) {
@@ -267,13 +278,193 @@ static void print_ms_edges(const MS_Graph & graph, std::ostream & out) {
 	out << std::endl;
 }
 
+/* test methods */
+static void test_ms_graph(const File & root, const CodeFile & cfile, CFuncProject & funcs,
+	CMutant & cmutant, CTest & ctest, CScore & cscore, MS_Graph & graph) {
+	// get set of mutants and tests in project
+	MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+	MutantSet & mutants = *(mspace.create_set()); mutants.complement();
+	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+	funcs.load_functions_for(cfile);
+	CFunctionSpace & funcspace = funcs.get_function_space(cfile);
 
-/* test method */
+	// head information
+	std::cout << "Load functions:\n\t{";
+	const std::set<std::string> & funcnames = funcspace.get_function_names();
+	auto beg = funcnames.begin(), end = funcnames.end();
+	while (beg != end) {
+		std::cout << *(beg++);
+		if (beg != end) std::cout << "; ";
+	}
+	std::cout << "}\n";
+
+	// get score vector producer | consumer
+	ScoreSource & score_src = cscore.get_source(cfile);
+	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	FileScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+
+	// MS-Graph-Build
+	build_up_graph(graph, producer, consumer);
+
+	// print graph
+	// print_ms_graph(graph, std::cout);
+
+	// output equivalence
+	std::map<Mutant::ID, MType> typelib;
+	classify_by_functions(mspace, funcspace, typelib);
+	std::ofstream fout(root.get_path() + "/analysis/mutants.txt");
+	print_mutants(graph, typelib, fout); fout.close();
+	std::ofstream eout(root.get_path() + "/analysis/graph.txt");
+	print_ms_edges(graph, eout); eout.close();
+
+	// release resource
+	ctest.delete_test_set(&tests); mspace.delete_set(&mutants);
+}
+static void test_ms_graph(const File & root, const CodeFile & cfile, CFuncProject & funcs, 
+	CMutant & cmutant, CTest & ctest, CScore & cscore, const std::set<std::string> & operators, 
+	MS_Graph & graph) {
+	// get set of mutants and tests in project
+	MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+	MutantSet & mutants = *(mspace.create_set()); mutants.complement();
+	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+	funcs.load_functions_for(cfile);
+	CFunctionSpace & funcspace = funcs.get_function_space(cfile);
+
+	// head information
+	std::cout << "Load functions:\n\t{";
+	const std::set<std::string> & funcnames = funcspace.get_function_names();
+	auto beg = funcnames.begin(), end = funcnames.end();
+	while (beg != end) {
+		std::cout << *(beg++);
+		if (beg != end) std::cout << "; ";
+	}
+	std::cout << "}\n";
+
+	// get score vector producer | consumer
+	ScoreSource & score_src = cscore.get_source(cfile);
+	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	FileScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+
+	// select mutants
+	std::set<Mutant::ID> mutset;
+	select_mutants_by_operators(mspace, operators, mutset);
+	ScoreFilter filter(producer, mutset);
+
+	// MS-Graph-Build
+	build_up_graph(graph, filter, consumer);
+
+	// print graph
+	// print_ms_graph(graph, std::cout);
+
+	// output equivalence
+	std::map<Mutant::ID, MType> typelib;
+	classify_by_functions(mspace, funcspace, typelib);
+	std::ofstream fout(root.get_path() + "/analysis/mutants.txt");
+	print_mutants(graph, typelib, fout); fout.close();
+	std::ofstream eout(root.get_path() + "/analysis/graph.txt");
+	print_ms_edges(graph, eout); eout.close();
+
+	// release resource
+	ctest.delete_test_set(&tests); mspace.delete_set(&mutants);
+}
+static void test_cv_graph(const File & root, const CodeFile & cfile, CFuncProject & funcs,
+	CMutant & cmutant, CTest & ctest, CTrace & ctrace, CScore & cscore, MS_Graph & graph) {
+	// load coverage information
+	CoverageSpace & covspac = ctrace.get_space();
+	MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+	MutantSet & mutants = *(mspace.create_set()); mutants.complement();
+	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+	funcs.load_functions_for(cfile);
+	CFunctionSpace & funcspace = funcs.get_function_space(cfile);
+	covspac.add_file_coverage(cfile, tests); ctrace.load_coverage(cfile);
+	std::cout << "Coverage loading...\n";
+
+	// coverage vector producer
+	FileCoverage & filecov = covspac.get_file_coverage(cfile);
+	CoverageProducer cproducer(mspace, filecov);
+	CoverageConsumer cconsumer;
+
+	// score producer
+	ScoreSource & score_src = cscore.get_source(cfile);
+	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	CoverageScoreProducer producer(score_func, cproducer, cconsumer);
+	ScoreConsumer consumer(score_func);
+
+	// MS-Graph-Build
+	build_up_graph(graph, producer, consumer);
+
+	// outputs graph
+	std::map<Mutant::ID, MType> typelib;
+	classify_by_functions(mspace, funcspace, typelib);
+	std::ofstream fout(root.get_path() + "/analysis/cmutants.txt");
+	print_mutants(graph, typelib, fout); fout.close();
+	std::ofstream eout(root.get_path() + "/analysis/cgraph.txt");
+	print_ms_edges(graph, eout); eout.close();
+
+	// release resource
+	ctest.delete_test_set(&tests);
+}
+static void test_cv_ms_graphs(const MutantSpace & mspace, const MS_Graph & mgraph, const MS_Graph & cgraph) {
+	Mutant::ID mid, n = mspace.number_of_mutants();
+	std::cout << "/---------- validation ----------/\n";
+	for (mid = 0; mid < n; mid++) {
+		if (mgraph.has_node_of(mid)) {
+			MSG_Node & snode = mgraph.get_node_of(mid);
+			MSG_Node & cnode = cgraph.get_node_of(mid);
+			if (!snode.get_score_vector().subsume(cnode.get_score_vector())) {
+				std::cout << "\t(error): unable to understand mutant #" << mid << "\n";
+			}
+			//else std::cout << "\t(pass) mutant #" << mid << "\n";
+		}
+	}
+	std::cout << "/------------------------------/\n";
+}
+static void test_cv_ms_equivalence(MutantSpace & mspace, const MS_Graph & mgraph, const MS_Graph & cgraph) {
+	Mutant::ID i, j, n = mspace.number_of_mutants();
+	size_t eqs = 0, subsuming = 0, subsumed = 0, nons = 0;
+	size_t M = 0;
+	for (i = 0; i < n; i++) {
+		if (mgraph.has_node_of(i)) {
+			M++;
+			MSG_Node & ni = mgraph.get_node_of(i);
+			MSG_Node & ci = cgraph.get_node_of(i);
+			const BitSeq & bi = ci.get_score_vector();
+
+			for (j = i + 1; j < n; j++) {
+				if (mgraph.has_node_of(j)) {
+					MSG_Node & nj = mgraph.get_node_of(j);
+					MSG_Node & cj = cgraph.get_node_of(j);
+					const BitSeq & bj = cj.get_score_vector();
+
+					if (ni.get_node_id() == nj.get_node_id()) {
+						if (bi.equals(bj)) eqs++;
+						else if (bi.subsume(bj))
+							subsuming++;
+						else if (bj.subsume(bi))
+							subsumed++;
+						else nons++;
+					}
+				}
+			}
+		}
+	}
+
+	size_t total = eqs + subsuming + subsumed + nons;
+	std::cout << "\tBlocks: " << cgraph.size() << "\n";
+	std::cout << "\tMutants: " << M << "\n";
+	std::cout << "\tEquivalent: " << eqs << "/" << total << " (" << ((double)eqs) / ((double)total) << ")\n";
+	std::cout << "\tSubsumings: " << subsuming << "/" << total << " (" << ((double)subsuming) / ((double)total) << ")\n";
+	std::cout << "\tSubsummeds: " << subsumed << "/" << total << " (" << ((double)subsumed) / ((double)total) << ")\n";
+	std::cout << "\tNonRelated: " << nons << "/" << total << " (" << ((double)nons) / ((double)total) << ")\n";
+}
+
+
+/* main method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
-	TestType ttype = TestType::replace;
+	std::string prname = "tcas";
+	TestType ttype = TestType::tcas;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -285,85 +476,43 @@ int main() {
 	CMutant & cmutant = *(new CMutant(root, program.get_source()));
 	CScore & cscore = *(new CScore(root, cmutant, ctest));
 
+	// coverage load
+	CTrace & ctrace = *(new CTrace(root, 
+		program.get_source(), ctest.get_space()));
+
 	// load mutants and tests
 	load_tests_mutants(ctest, cmutant);
 
 	// select mutation operators
-	std::set<std::string> operators;
-	select_operators(operators);
+	//std::set<std::string> operators;
+	//select_operators(operators);
 
 	// load MSG
 	const CodeSpace & cspace = cmutant.get_code_space();
 	const std::set<CodeFile *> & cfiles = cspace.get_code_set();
 	auto beg = cfiles.begin(), end = cfiles.end();
 	while (beg != end) {
-		// get set of mutants and tests in project
+		// get the next file of code
 		const CodeFile & cfile = *(*(beg++));
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		MutantSet & mutants = *(mspace.create_set()); mutants.complement();
-		TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
-		funcs.load_functions_for(cfile);
-		CFunctionSpace & funcspace = funcs.get_function_space(cfile);
-		
-		// head information
-		std::cout << "Load functions:\n\t{";
-		const std::set<std::string> & funcnames = funcspace.get_function_names();
-		auto beg = funcnames.begin(), end = funcnames.end();
-		while (beg != end) {
-			std::cout << *(beg++);
-			if (beg != end) std::cout << "; ";
-		}
-		std::cout << "}\n";
+		MS_Graph mgraph(mspace), cgraph(mspace);
 		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
 
-		/* print function body (test) */
-		/*std::cout << "---------- functions ----------\n";
-		beg = funcnames.begin(), end = funcnames.end();
-		while (beg != end) {
-			const CFunction & func = funcspace.get_function(*(beg++));
-			if (func.is_defined()) {
-				const CodeLocation & loc = func.get_definition_point();
-				std::cout << "\n@" << func.get_name() << "\n";
-				std::cout << loc.get_text_at() << "\n\n";
-			}
-		}
-		std::cout << "-------------------------------\n"; */
-
-		// get score vector producer | consumer
-		ScoreSource & score_src = cscore.get_source(cfile);
-		ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
-		FileScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
-
-		// select mutants
-		std::set<Mutant::ID> mutset;
-		select_mutants_by_operators(mspace, operators, mutset);
-		ScoreFilter filter(producer, mutset);
-		
-		// MS-Graph-Build
-		MS_Graph graph(mspace);
-		//build_up_graph(graph, producer, consumer);
-		build_up_graph(graph, filter, consumer);
-
-		// print graph
-		print_ms_graph(graph, std::cout);
-
-		MS_C_Graph cgraph;
-		std::map<Mutant::ID, MType> typelib;
-		classify_by_functions(mspace, funcspace, typelib);
-		classify_graph(graph, cgraph, typelib);
-		print_classify_graph(cgraph, std::cout);
-
-		// output equivalence
-		std::ofstream fout(root.get_path() + "/analysis/mutants.txt");
-		print_mutants(graph, typelib, fout); fout.close();
-		std::ofstream eout(root.get_path() + "/analysis/graph.txt");
-		print_ms_edges(graph, eout); eout.close();
+		// test subsumption graph for mutants
+		test_ms_graph(root, cfile, funcs, cmutant, ctest, cscore, mgraph);
+		// test subsumption graph for coverage
+		test_cv_graph(root, cfile, funcs, cmutant, ctest, ctrace, cscore, cgraph);
+		// validate
+		test_cv_ms_graphs(mspace, mgraph, cgraph);
+		// print-relations
+		test_cv_ms_equivalence(mspace, mgraph, cgraph);
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";
 	}
 
 	// delete memory
+	delete &ctrace;
 	delete &cscore; delete &funcs;
 	delete &cmutant; delete &ctest;
 	delete &program; delete &root;

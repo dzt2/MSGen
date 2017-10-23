@@ -225,7 +225,6 @@ ScoreVector * ScoreFilter::produce() {
 	return nullptr;
 }
 
-
 CoverageVector * CoverageProducer::produce() {
 	if (beg >= end) return nullptr;
 	else {
@@ -249,6 +248,17 @@ CoverageVector * CoverageProducer::produce() {
 		/* return */ return cvec;
 	}
 }
+ScoreVector * CoverageScoreProducer::produce() {
+	CoverageVector * cvec;
+	while ((cvec = producer.produce()) != nullptr) {
+		ScoreVector * svec = new ScoreVector(function, 
+			cvec->get_mutant(), function.get_tests().size());
+		(svec->svec).assign(cvec->get_coverage());
+		consumer.consume(cvec); return svec;
+	}
+	return nullptr;
+}
+
 
 /*
 int main() {

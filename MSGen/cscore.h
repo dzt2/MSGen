@@ -27,6 +27,10 @@ class CScore;
 class ScoreProducer;
 class ScoreConsumer;
 
+class FileScoreProducer;
+class ScoreFilter;
+class CoverageScoreProducer;
+
 /* score vector */
 class ScoreVector {
 protected:
@@ -49,6 +53,8 @@ public:
 
 	/* create and kill-set */
 	friend class FileScoreProducer;
+	/* create */
+	friend class CoverageScoreProducer;
 	/* delete */
 	friend class ScoreConsumer;
 protected:
@@ -282,5 +288,17 @@ public:
 	/* consume next coverage vector */
 	void consume(CoverageVector * cvec) { delete cvec; }
 };
+/* produce score vector for coverage information */
+class CoverageScoreProducer : public ScoreProducer {
+public:
+	CoverageScoreProducer(const ScoreFunction & func, 
+		CoverageProducer & prod, CoverageConsumer & cons) :
+		function(func), producer(prod), consumer(cons) {}
+	~CoverageScoreProducer() {}
 
-
+	ScoreVector * produce();
+private:
+	const ScoreFunction & function;
+	CoverageProducer & producer;
+	CoverageConsumer & consumer;
+};

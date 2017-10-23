@@ -5,9 +5,9 @@
 /*
 int main() {
 // create projects
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "print_tokens2"; 
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "Calendar"; 
 	File & dir = *(new File(prefix + name)); CProgram & program = *(new CProgram(dir));
-	CTest & tproject = *(new CTest(TestType::print_tokens, dir, program.get_exec()));
+	CTest & tproject = *(new CTest(TestType::general, dir, program.get_exec()));
 	CTrace & cproject = *(new CTrace(dir, program.get_source(), tproject.get_space()));
 	
 	// load tests from ../suites/
