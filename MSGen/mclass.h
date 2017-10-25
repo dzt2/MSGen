@@ -34,6 +34,8 @@ public:
 
 	/* mutants of this node */
 	size_t number_of_mutants() const { return mutants; }
+	/* get the id to the original MSG-Node */
+	long get_source() const { return source; }
 
 	/* output degree */
 	size_t get_ou_degree() const { return nexts.size(); }
@@ -51,7 +53,7 @@ public:
 
 protected:
 	/* create an unlinked node in classified graph */
-	MS_C_Node(MS_C_Graph & g, ID nid, const MType & typ)
+	MS_C_Node(MS_C_Graph & g, ID nid, long src, const MType & typ)
 		: graph(g), id(nid), type(typ), mutants(0) {}
 	/* deconstructor */
 	~MS_C_Node() { prevs.clear(); nexts.clear(); }
@@ -66,6 +68,8 @@ private:
 	MS_C_Graph & graph;
 	/* id of the node */
 	ID id; 
+	/* id to the original MSG_Node */
+	long source;
 	/* type of the mutants in this node */
 	MType type;
 	/* nodes from this one pointed */
@@ -93,7 +97,7 @@ public:
 	MS_C_Node & get_node_of(Mutant::ID) const;
 
 	/* create a new node in the graph */
-	MS_C_Node & new_node(const MType &);
+	MS_C_Node & new_node(const MType &, long source);
 	/* add the mutant to the node in graph */
 	bool add_mutant(MS_C_Node &, Mutant::ID);
 	/* connect node x to y */

@@ -25,8 +25,8 @@ MS_C_Node & MS_C_Graph::get_node_of(Mutant::ID mid) const {
 	}
 	else { auto iter = node_map.find(mid); return *(iter->second); }
 }
-MS_C_Node & MS_C_Graph::new_node(const MType & type) {
-	MS_C_Node * node = new MS_C_Node(*this, nodes.size(), type);
+MS_C_Node & MS_C_Graph::new_node(const MType & type, long source) {
+	MS_C_Node * node = new MS_C_Node(*this, nodes.size(), source, type);
 	nodes.push_back(node); return *node;
 }
 bool MS_C_Graph::add_mutant(MS_C_Node & node, Mutant::ID mid) {
@@ -90,7 +90,7 @@ void MS_C_Build::collect_nodes(const MS_Graph & source, MS_C_Graph & graph) {
 			/* undefined then create one */
 			if (type_nodes.count(key) == 0) {
 				/* create a new node in classified graph */
-				MS_C_Node & cnode = graph.new_node(type);
+				MS_C_Node & cnode = graph.new_node(type, nid);
 				type_nodes[key] = &cnode;
 				
 				/* connect the classified node with original cluster */
