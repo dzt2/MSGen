@@ -818,8 +818,8 @@ static void print_number_blocks(MutantSpace & mspace, const std::map<MSG_Node *,
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
-	TestType ttype = TestType::replace;
+	std::string prname = "Calendar";
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
