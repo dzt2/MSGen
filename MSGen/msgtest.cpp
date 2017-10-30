@@ -698,7 +698,7 @@ static void evaluate_number_blocks(const MS_Graph & mgraph, const MS_Graph & cgr
 	}
 
 	/* calculate average number of subsumed ones */
-	numbers.clear();
+	numbers.clear(); 
 	auto beg = counters.begin();
 	auto end = counters.end();
 	while (beg != end) {
@@ -751,21 +751,29 @@ static void compare_height_coverage(std::map<MSG_Node *, double> & heights) {
 }
 /* evaluate the postfix and negative case in c-height and s-number */ 
 static void compare_height_number(const MS_Graph & cgraph, const std::map<MSG_Node *, double> & numbers) {
-	size_t n = cgraph.size(), pos = 0, neg = 0, sum;
-	for (size_t cid = 0; cid < n; cid++) {
-		MSG_Node & src = cgraph.get_node(cid);
-		auto iter1 = numbers.find(&src);
-		double value1 = iter1->second;
+	size_t n = cgraph.size(), i, j;
+	size_t pos = 0, neg = 0, sum;
+	
+	for (i = 0; i < n; i++) {
+		MSG_Node & ci = cgraph.get_node(i);
+		if (numbers.count(&ci) == 0) continue;
+		const BitSeq & bi = ci.get_score_vector();
+		auto iter1 = numbers.find(&ci);
+		size_t value1 = iter1->second;
 
-		const MSG_Port & port = src.get_ou_port();
-		for (int k = 0; k < port.degree(); k++) {
-			MSG_Edge & edge = port.get_edge(k);
-			MSG_Node & trg = edge.get_target();
-			auto iter2 = numbers.find(&trg);
-			double value2 = iter2->second;
+		for (j = 0; j < n; j++) {
+			if (i == j) continue;
 
-			if (value1 < value2) neg++;
-			else pos++;
+			MSG_Node & cj = cgraph.get_node(j);
+			if (numbers.count(&cj) == 0) continue;
+			const BitSeq & bj = cj.get_score_vector();
+			auto iter2 = numbers.find(&cj);
+			size_t value2 = iter2->second;
+
+			if (bi.subsume(bj)) {
+				if (value1 >= value2) pos++;
+				else neg++;
+			}
 		}
 	}
 	sum = pos + neg;
@@ -852,22 +860,24 @@ static void print_number_distribute(MutantSpace & mspace,
 	while (beg != end) {
 		MSG_Node *cnode = beg->first;
 		double height = beg->second;
-		auto iter = numbers.find(cnode);
-		double number = iter->second;
+		if (numbers.count(cnode) > 0) {
+			auto iter = numbers.find(cnode);
+			double number = iter->second;
 
-		if (percents.count(height) == 0) {
-			double * arr = new double[4];
-			arr[0] = total, arr[1] = 0;
-			arr[2] = 0, arr[3] = 0;
-			percents[height] = arr;
+			if (percents.count(height) == 0) {
+				double * arr = new double[4];
+				arr[0] = total, arr[1] = 0;
+				arr[2] = 0, arr[3] = 0;
+				percents[height] = arr;
+			}
+			auto iter2 = percents.find(height);
+			double * list = iter2->second;
+
+			if (list[0] > number) list[0] = number;
+			if (list[1] < number) list[1] = number;
+			list[2] = list[2] + number;
+			list[3] = list[3] + 1;
 		}
-		auto iter2 = percents.find(height);
-		double * list = iter2->second;
-
-		if (list[0] > number) list[0] = number;
-		if (list[1] < number) list[1] = number;
-		list[2] = list[2] + number; 
-		list[3] = list[3] + 1;
 
 		beg++;
 	}
@@ -887,14 +897,12 @@ static void print_number_distribute(MutantSpace & mspace,
 	}
 }
 
-
-
 /* main method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "bubble";
-	TestType ttype = TestType::general;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
