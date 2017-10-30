@@ -749,6 +749,32 @@ static void compare_height_coverage(std::map<MSG_Node *, double> & heights) {
 		<< "\t(" << ((double)neg) / ((double)(pos + neg)) << ")\n";
 	std::cout << "/-------------------------------------/\n";
 }
+/* evaluate the postfix and negative case in c-height and s-number */ 
+static void compare_height_number(const MS_Graph & cgraph, const std::map<MSG_Node *, double> & numbers) {
+	size_t n = cgraph.size(), pos = 0, neg = 0, sum;
+	for (size_t cid = 0; cid < n; cid++) {
+		MSG_Node & src = cgraph.get_node(cid);
+		auto iter1 = numbers.find(&src);
+		double value1 = iter1->second;
+
+		const MSG_Port & port = src.get_ou_port();
+		for (int k = 0; k < port.degree(); k++) {
+			MSG_Edge & edge = port.get_edge(k);
+			MSG_Node & trg = edge.get_target();
+			auto iter2 = numbers.find(&trg);
+			double value2 = iter2->second;
+
+			if (value1 < value2) neg++;
+			else pos++;
+		}
+	}
+	sum = pos + neg;
+
+	std::cout << "\n/---------- CHeight & SubNumbers ----------/\n";
+	std::cout << "\tPositive-case: " << pos << "/" << sum << " (" << ((double)pos) / ((double)sum) << ")\n";
+	std::cout << "\tNegative-case: " << neg << "/" << sum << " (" << ((double)neg) / ((double)sum) << ")\n";
+	std::cout << "/------------------------------------------/\n";
+}
 
 // outputs methods
 /* print the information of graph */
@@ -813,12 +839,61 @@ static void print_number_blocks(MutantSpace & mspace, const std::map<MSG_Node *,
 
 	out << "\taverage-value: " << values << "/" << sum << " (" << values / sum << ")\n";
 }
+/* c-height minimal maximal average (number of mutants subsumed by the mutants in that block) */
+static void print_number_distribute(MutantSpace & mspace, 
+	const std::map<MSG_Node *, double> & numbers, 
+	const std::map<MSG_Node *, double> & heights, 
+	std::ostream & out) {
+	out << "c-height\tmin\tmax\tavg\n";
+
+	size_t total = mspace.number_of_mutants();
+	std::map<double, double *> percents;	// min, max, sum, num
+	auto beg = heights.begin(), end = heights.end();
+	while (beg != end) {
+		MSG_Node *cnode = beg->first;
+		double height = beg->second;
+		auto iter = numbers.find(cnode);
+		double number = iter->second;
+
+		if (percents.count(height) == 0) {
+			double * arr = new double[4];
+			arr[0] = total, arr[1] = 0;
+			arr[2] = 0, arr[3] = 0;
+			percents[height] = arr;
+		}
+		auto iter2 = percents.find(height);
+		double * list = iter2->second;
+
+		if (list[0] > number) list[0] = number;
+		if (list[1] < number) list[1] = number;
+		list[2] = list[2] + number; 
+		list[3] = list[3] + 1;
+
+		beg++;
+	}
+
+	auto beg1 = percents.begin();
+	auto end1 = percents.end();
+	while (beg1 != end1) {
+		double height = beg1->first;
+		double * list = beg1->second;
+
+		out << height << "\t";
+		out << list[0] << "\t";
+		out << list[1] << "\t";
+		out << list[2] / list[3] << "\n";
+
+		delete list; beg1++;
+	}
+}
+
+
 
 /* main method */
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "Calendar";
+	std::string prname = "bubble";
 	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
@@ -872,10 +947,11 @@ int main() {
 		evaluate_height_blocks(cgraph, cgraph, cheight);
 		evaluate_number_blocks(mgraph, cgraph, numbers);
 		std::ofstream cnumb(root.get_path() + "/analysis/cov_number.txt");
-		print_number_blocks(mspace, numbers, cheight, cnumb); cnumb.close();
+		print_number_distribute(mspace, numbers, cheight, cnumb); cnumb.close();
 
 		// std-out analysis 
 		compare_height_coverage(heights);
+		compare_height_number(cgraph, numbers);
 
 		// correlations
 		// test subsumption graph for mutants
