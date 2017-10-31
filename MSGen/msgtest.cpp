@@ -898,6 +898,7 @@ static void print_number_distribute(MutantSpace & mspace,
 }
 
 /* main method */
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
@@ -984,3 +985,4 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/

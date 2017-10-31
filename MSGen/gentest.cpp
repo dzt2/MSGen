@@ -2,12 +2,12 @@
 #include "ctrace.h"
 #include "cscript.h"
 
-/*
+
 int main() {
-// create projects
-	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "Calendar"; 
+	// create projects
+	std::string prefix = "../../../MyData/SiemensSuite/"; std::string name = "flex"; 
 	File & dir = *(new File(prefix + name)); CProgram & program = *(new CProgram(dir));
-	CTest & tproject = *(new CTest(TestType::general, dir, program.get_exec()));
+	CTest & tproject = *(new CTest(TestType::flex, dir, program.get_exec()));
 	CTrace & cproject = *(new CTrace(dir, program.get_source(), tproject.get_space()));
 	
 	// load tests from ../suites/
@@ -23,7 +23,7 @@ int main() {
 	CTraceScriptFile & gettrace = *((CTraceScriptFile *)(&(script.get_space().get_script("gettrace.sh"))));
 
 	// establish arguments
-	runall.set_echo(true); runall.set_timeout(1);
+	runall.set_echo(true); runall.set_timeout(3);
 	gettrace.set_echo(true); gettrace.set_timeout(0);
 	auto cfiles = program.get_source().get_code_set();
 	auto beg = cfiles.begin(), end = cfiles.end();
@@ -40,4 +40,3 @@ int main() {
 	std::cout << "\nPress any key to exit..." << std::endl;
 	getchar(); return 0;
 }
-*/

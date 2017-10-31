@@ -404,6 +404,94 @@ std::string * TestLoader_Totinfo::next_inputs() {
 	else return nullptr;
 }
 
+std::string * TestLoader_Flex::next_inputs() {
+	/* get next line */
+	std::string * lineptr = this->lineptr; roll_next();
+
+	/* format: -P[inputstring] -F[lex.yy.c|out1] -F[error|out2] -C[V0.xxx] */
+	/* target: {flex.exe} error -configlist ../inputs/filex \n cat ../exec/lex.yy.c split ../exec/error split ../exec/lex.backup */
+	if (lineptr != nullptr) {
+		/* get next line */
+		std::string & line = *lineptr;
+		int k = 0, n = line.length(); char ch;
+		std::string * ans = nullptr;
+		char tag; std::string content;
+
+		/* content list */
+		std::string inlist, oulist;
+
+		/* get the inlist & oulist */
+		while (k < n) {
+			tag = next_tag(line, k);
+			extracts(line, k, content);
+
+			if (tag == 'P') 
+				inlist = content;
+			else if (tag == 'F') {
+				for (int j = 0; j < content.length(); j++) {
+					if (content[j] == '|') break;
+					else oulist += content[j];
+				}
+				oulist += " split ";
+			}
+		}
+
+		/* extract -o from inlist, oulist */
+		extrange(inlist, oulist);
+
+		/* generate commands */
+		if (!inlist.empty()) {
+			ans = new std::string();
+			*ans += inlist + "\n";
+			*ans += "cat " + oulist;
+		}
+
+		delete lineptr; return ans;
+	}
+}
+char TestLoader_Flex::next_tag(const std::string & line, int & k) {
+	int n = line.length();
+	while (k < n) {
+		if (line[k++] == '-') break;
+	}
+	if (k >= n) return '\0';
+	else return line[k++];
+}
+bool TestLoader_Flex::extracts(const std::string & line, int & k, std::string & text) {
+	int n = line.length();
+
+	text = ""; char ch;
+	while (k < n) {
+		if (line[k++] == '[') break;
+	}
+	while (k < n) {
+		ch = line[k++];
+		if (ch == ']') break;
+		else text = text + ch;
+	}
+
+	return true;
+}
+bool TestLoader_Flex::extrange(std::string & inlist, std::string & oulist) {
+	std::string incache;
+	for (int i = 0; i < inlist.length(); i++) {
+		incache += inlist[i];
+		if (inlist[i] == '-') {
+			incache += inlist[++i];
+			if (inlist[i] == 'o') {
+				while (i < inlist.length()) {
+					if (inlist[i] == ' ') break;
+					else i++;
+				}
+				incache += "./outputs "; 
+				oulist += " split outputs";
+			}
+		}
+	}
+	inlist = incache;
+	return true;
+}
+
 CTest::CTest(enum TestType type, const File & dir, const ExeSpace & exec) : root(dir), etype(type), test_pool() {
 	source = new TestSource(root);
 	space = new TestSpace(*this, *source, exec);
@@ -432,6 +520,8 @@ bool CTest::load() {
 		loader = new TestLoader_Tcas(*space); break;
 	case tot_info:
 		loader = new TestLoader_Totinfo(*space); break;
+	case flex:
+		loader = new TestLoader_Flex(*space); break;
 	default:
 		loader = new TestLoader(*space);
 	}

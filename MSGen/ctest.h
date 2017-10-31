@@ -39,6 +39,11 @@ enum TestType {
 	schedule2,
 	tcas,
 	tot_info,
+
+	flex,
+	gzip,
+	sed,
+	space,
 };
 
 /* TestCase = {input; output; program;} */
@@ -261,6 +266,39 @@ class TestLoader_Totinfo : public TestLoader {
 public:
 	TestLoader_Totinfo(const TestSpace & spac) : TestLoader(spac) {}
 	~TestLoader_Totinfo() {}
+	std::string * next_inputs();
+};
+/* parser for flex test suite */
+class TestLoader_Flex : public TestLoader {
+public:
+	TestLoader_Flex(const TestSpace & spac) : TestLoader(spac) {}
+	~TestLoader_Flex() {}
+	std::string * next_inputs();
+
+private:
+	char next_tag(const std::string &, int &);
+	bool extracts(const std::string &, int &, std::string &);
+	bool extrange(std::string & inlist, std::string &oulist);
+};
+/* parser for gzip test suite */
+class TestLoader_Gzip : public TestLoader {
+public:
+	TestLoader_Gzip(const TestSpace & spac) : TestLoader(spac) {}
+	~TestLoader_Gzip() {}
+	std::string * next_inputs();
+};
+/* parser for sed test suite */
+class TestLoader_Sed : public TestLoader {
+public:
+	TestLoader_Sed(const TestSpace & spac) : TestLoader(spac) {}
+	~TestLoader_Sed() {}
+	std::string * next_inputs();
+};
+/* parser for space test suite */
+class TestLoader_Space : public TestLoader {
+public:
+	TestLoader_Space(const TestSpace & spac) : TestLoader(spac) {}
+	~TestLoader_Space() {}
 	std::string * next_inputs();
 };
 
