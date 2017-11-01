@@ -1044,3 +1044,77 @@ bool MSG_Build_Quick::purify_direct_subsumed(std::set<MSG_Node *> & DS) {
 	while (beg != end) DS.erase(*(beg++));
 	return true;
 }
+
+const std::set<MSG_Pair *> & MSG_Relation::get_related_sources(MSG_Node & node) const {
+	if (trg_src.count(node.get_node_id()) == 0) {
+		CError error(CErrorType::InvalidArguments, 
+			"MSG_Relation::get_rel;ated_sources", 
+			"Undefined node: " + std::to_string(node.get_node_id()));
+		CErrorConsumer::consume(error); 
+		exit(CErrorType::InvalidArguments);
+	}
+	else {
+		auto iter = trg_src.find(node.get_node_id());
+		return *(iter->second);
+	}
+}
+const std::set<MSG_Pair *> & MSG_Relation::get_related_targets(MSG_Node & node) const {
+	if (src_trg.count(node.get_node_id()) == 0) {
+		CError error(CErrorType::InvalidArguments,
+			"MSG_Relation::get_rel;ated_sources",
+			"Undefined node: " + std::to_string(node.get_node_id()));
+		CErrorConsumer::consume(error);
+		exit(CErrorType::InvalidArguments);
+	}
+	else {
+		auto iter = src_trg.find(node.get_node_id());
+		return *(iter->second);
+	}
+}
+void MSG_Relation::build_up() {
+	MutantSpace & mspace = source.get_space();
+	Mutant::ID n = mspace.number_of_mutants();
+	for (Mutant::ID i = 0; i < n; i++) {
+		if (source.has_node_of(i) && target.has_node_of(i)) {
+			/* get source | target nodes */
+			MSG_Node & src = source.get_node_of(i);
+			MSG_Node & trg = target.get_node_of(i);
+			if (src.get_score_degree() == 0) continue;
+			if (trg.get_score_degree() == 0) continue;
+
+			/* compute their key */
+			std::string key = "[" + std::to_string(src.get_node_id()) 
+				+ "][" + std::to_string(trg.get_node_id()) + "]";
+			
+			/* construct the maps */
+			if (pairs.count(key) == 0) {
+				MSG_Pair * pair = new MSG_Pair(src, trg);
+				pairs[key] = pair;
+
+				if (src_trg.count(src.get_node_id()) == 0)
+					src_trg[src.get_node_id()] = new std::set<MSG_Pair *>();
+				if (trg_src.count(trg.get_node_id()) == 0)
+					trg_src[trg.get_node_id()] = new std::set<MSG_Pair *>();
+
+				auto iter1 = src_trg.find(src.get_node_id());
+				(iter1->second)->insert(pair);
+				auto iter2 = trg_src.find(trg.get_node_id());
+				(iter2->second)->insert(pair);
+			}
+
+			/* insert mutants */
+			auto iter = pairs.find(key);
+			(iter->second)->add_mutant(i);
+		} // end if
+	} // end for
+}
+void MSG_Relation::clear_all() {
+	auto beg = pairs.begin();
+	auto end = pairs.end();
+	while (beg != end)
+		delete ((beg++)->second);
+	pairs.clear(); 
+	src_trg.clear();
+	trg_src.clear();
+}
+

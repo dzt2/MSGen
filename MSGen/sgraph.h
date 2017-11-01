@@ -22,6 +22,9 @@ class MSG_Port;
 class MS_Graph;
 class MSG_Build;
 
+class MSG_Pair;
+class MSG_Relation;
+
 /* edge in MSG */
 class MSG_Edge {
 protected:
@@ -336,4 +339,77 @@ private:
 	/* delete those in DS that are subsumed by another one in DS */
 	bool purify_direct_subsumed(std::set<MSG_Node *> & DS);
 
+};
+
+/* pair of node for relating nodes */
+class MSG_Pair {
+public:
+	/* create a pair from source node to target node */
+	MSG_Pair(MSG_Node & s, MSG_Node & t) : src(s), trg(t) {
+		mutants = s.get_graph().get_space().create_set();
+	}
+	/* deconstructor */
+	~MSG_Pair() { mutants->get_space().delete_set(mutants); }
+	/* add mutant that belong to both nodes in the pair */
+	void add_mutant(Mutant::ID mid) { mutants->add_mutant(mid); }
+
+public:
+	/* get source node */
+	MSG_Node & get_source() const { return src; }
+	/* get target node */
+	MSG_Node & get_target() const { return trg; }
+
+	/* whether the mutant belongs to both nodes in this pair */
+	bool has_mutant(Mutant::ID mid) const { return mutants->has_mutant(mid); }
+	/* get the number of mutants belong to both nodes in this pair */
+	size_t size_of() const { return mutants->number_of_mutants(); }
+	/* get the set of mutants in this pair */
+	const MutantSet & get_mutants() const { return *mutants; }
+	
+	/* create | delete | add_mutant */
+	friend class MSG_Relation;
+
+private:
+	/* node in source graph */
+	MSG_Node & src;
+	/* node in target graph */
+	MSG_Node & trg;
+	/* set of mutants belonging to both nodes */
+	MutantSet * mutants;
+};
+/* relations between two graphs */
+class MSG_Relation {
+protected:
+	void build_up();
+	void clear_all();
+
+public:
+	/* build up relations between two MSG */
+	MSG_Relation(MS_Graph & src, MS_Graph & trg) : source(src), 
+		target(trg), pairs(), src_trg(), trg_src() { build_up(); }
+	/* deconstructor */
+	~MSG_Relation() { clear_all(); }
+
+	/* get the source graph */
+	MS_Graph & get_source() const { return source; }
+	/* get the target graph */
+	MS_Graph & get_target() const { return target; }
+
+	/* whether there is nodes with this node is related in source graph */
+	bool has_related_sources(MSG_Node & node) const { return trg_src.count(node.get_node_id()) > 0; }
+	/* whether there is nodes with this node is related in target graph */
+	bool has_related_targets(MSG_Node & node) const { return src_trg.count(node.get_node_id()) > 0; }
+
+	const std::set<MSG_Pair *> & get_related_sources(MSG_Node &) const;
+	const std::set<MSG_Pair *> & get_related_targets(MSG_Node &) const;
+
+	/* number of pairs between two graph */
+	size_t size_of() const { return pairs.size(); }
+
+private:
+	MS_Graph & source;
+	MS_Graph & target;
+	std::map<std::string, MSG_Pair *> pairs;
+	std::map<long, std::set<MSG_Pair *> *> src_trg;
+	std::map<long, std::set<MSG_Pair *> *> trg_src;
 };
