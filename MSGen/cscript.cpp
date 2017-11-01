@@ -52,10 +52,10 @@ void CScriptFile::generate() const {
 		if (timeout > 0)
 			out << "timeout " << timeout << " ";
 
-		out << exec << " " << tc.get_input_string() << " > " << outputs << tc.get_output_file() << "\n";
+		out << exec << " " << tc.get_input_string() << "> " << outputs << tc.get_output_file() << "\n";
 
 		// for flex script
-		out << "rm lex.yy.c error lex.backup outputs\n";
+		// out << "rm lex.yy.c error lex.backup outputs\n";
 	}
 
 	/* flush and close */
@@ -125,10 +125,10 @@ void CTraceScriptFile::generate() const {
 		if (echo) out << "echo \"running test " << tc.get_id() << "\"\n";
 		out << "rm *.gcda *.gcov\n";
 		if (timeout > 0) out << "timeout " << timeout << " ";
-		out << exec << " " << tc.get_input_string() << " > " << outputs << tc.get_output_file() << "\n";
-		// out << "gcov *.c\n";
+		out << exec << " " << tc.get_input_string() << "> " << outputs << tc.get_output_file() << "\n";
+		out << "gcov *.c\n";
 		// for flex
-		out << "gcov flex.c\n";
+		// out << "gcov flex.c\n";
 
 		/* copy each code file's gcov to the ../trace/xxx.c/txx */
 		beg = code_files.begin(), end = code_files.end();
@@ -143,7 +143,7 @@ void CTraceScriptFile::generate() const {
 		} /* end while: iterate gcov file for each code file in the list to ../traces/ */
 
 		// for flex script
-		out << "rm lex.yy.c error lex.backup outputs\n";
+		// out << "rm lex.yy.c error lex.backup outputs\n";
 
 		out << "\n";
 	} /* end while: output all commands for every test in space */

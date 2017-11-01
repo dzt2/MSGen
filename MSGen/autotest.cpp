@@ -232,3 +232,36 @@ int main() {
 	return 0;
 }
 */
+
+/* gzip.c */
+/*
+int main() {
+	std::string prefix = "../../../MyData/SiemensSuite/";
+	std::string prname = "gzip";
+	std::ofstream out(prefix + prname + "/suites/test");
+
+	for (int i = 1; i <= 25; i++) {
+		out << "-P[-t]  -I[mydir/file" << i << ".gz]\n";
+		out << "-P[-t]  -I[mydir/file" << i << ".z]\n";
+		out << "-P[-d]  -I[mydir/file" << i << ".z]\n";
+		out << "-P[--decompress]  -I[mydir/file" << i << ".gz]\n";
+	}
+	
+	for (int i = 1; i <= 25; i++) {
+		out << "-P[-fqr1]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fqr2]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fqv3]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fqv4]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fqrv5]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fqrv6]  -I[mydir/file" << i << "]\n";
+		out << "-P[-frv7]  -I[mydir/file" << i << "]\n";
+		out << "-P[-frv8]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fq9]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fq1]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fr2]  -I[mydir/file" << i << "]\n";
+		out << "-P[-fr3]  -I[mydir/file" << i << "]\n";
+	}
+	out << std::endl; out.close();
+
+	return 0;
+}*/

@@ -184,8 +184,8 @@ std::string * TestLoader_Printtokens::next_inputs() {
 		if (!exist_file(space.get_source().get_input_dir().get_path() + FileSeparator + path)) return nullptr;
 
 		path = ".." + FileSeparator + space.get_source().get_input_dir().get_local_name() + FileSeparator + path;
-		if (is_std) return new std::string("< " + path);
-		else return new std::string(path);
+		if (is_std) return new std::string("< " + path + " ");
+		else return new std::string(path + " ");
 	}
 	else return nullptr;
 }
@@ -228,7 +228,7 @@ std::string * TestLoader_Replace::next_inputs() {
 				prefix += space.get_source().get_input_dir().get_local_name();
 				path = prefix + FileSeparator + path;
 
-				ans = new std::string(format + "< " + path);
+				ans = new std::string(format + "< " + path + " ");
 			}
 		}
 
@@ -305,7 +305,7 @@ std::string * TestLoader_Schedule::next_inputs() {
 			}
 			ans += "< ";
 			ans += ".." + FileSeparator + space.get_source().get_input_dir().get_local_name();
-			ans += FileSeparator + path;
+			ans += FileSeparator + path + " ";
 
 			return &ans;
 		}
@@ -356,6 +356,7 @@ std::string * TestLoader_Tcas::next_inputs() {
 				ans += std::to_string(num);
 				if (beg != end) ans += " ";
 			}
+			ans += " ";
 			return &ans;
 		}
 		/* empty line is invalid */
@@ -399,7 +400,7 @@ std::string * TestLoader_Totinfo::next_inputs() {
 
 		/* validation */
 		if (!exist_file(space.get_source().get_input_dir().get_path() + FileSeparator + path)) return nullptr;
-		else return new std::string("< .." + FileSeparator + space.get_source().get_input_dir().get_local_name() + FileSeparator + path);
+		else return new std::string("< .." + FileSeparator + space.get_source().get_input_dir().get_local_name() + FileSeparator + path + " ");
 	}
 	else return nullptr;
 }
@@ -444,6 +445,7 @@ std::string * TestLoader_Flex::next_inputs() {
 			ans = new std::string();
 			*ans += inlist + "\n";
 			*ans += "cat " + oulist;
+			*ans += " ";
 		}
 
 		delete lineptr; return ans;
@@ -492,6 +494,86 @@ bool TestLoader_Flex::extrange(std::string & inlist, std::string & oulist) {
 	return true;
 }
 
+std::string * TestLoader_Gzip::next_inputs() {
+	/* get next line */
+	std::string * lineptr = this->lineptr; roll_next();
+
+	/* format: -P[configs] -I[inputfile] -O[output] -X[shell]... */
+	/* target: {flex.exe} error -configlist ../inputs/filex \n cat ../exec/lex.yy.c split ../exec/error split ../exec/lex.backup */
+	if (lineptr != nullptr) {
+		/* get next line */
+		std::string & line = *lineptr;
+		int k = 0, n = line.length(); char ch;
+		std::string * ans = nullptr;
+		char tag; std::string content;
+
+		/* arguments */
+		std::string inputstr;
+
+		while (k < n) {
+			tag = get_tag(line, k);
+			get_content(line, k, content);
+
+			if (tag == 'P') {
+				inputstr += content + " ";
+			}
+			else if (tag == 'I') {
+				inputstr += "../inputs/" + content + " ";
+			}
+		}
+
+		if (content.empty()) return nullptr;
+		else {
+			if (is_test(inputstr)) 
+				inputstr += " 2";
+			else inputstr += " -c ";
+			return new std::string(inputstr);
+		}
+	}
+	else return nullptr;
+}
+char TestLoader_Gzip::get_tag(const std::string & line, int & k) {
+	int n = line.length();
+
+	while (k < n) {
+		if (line[k++] == '-') {
+			if (k < n) return line[k++];
+		}
+	}
+	return '\0';
+}
+bool TestLoader_Gzip::get_content(const std::string & line, int & k, std::string & content) {
+	int n = line.length();
+	char ch; content = "";
+	
+	while (k < n) {
+		if (line[k++] == '[') break;
+	}
+	while (k < n) {
+		ch = line[k++];
+		if (ch == ']') break;
+		else content += ch;
+	}
+	
+	return !content.empty();
+}
+bool TestLoader_Gzip::is_test(const std::string & inputstr) {
+	for (int k = 0; k < inputstr.length(); k++) {
+		if (inputstr[k] == '-') {
+			std::string tag = "";
+			while (k < inputstr.length()) {
+				if (inputstr[k] == ' ') break;
+				else tag += inputstr[k++];
+			}
+
+			if (tag == "-t" || 
+				tag == "--test") 
+				return true;
+		}
+	}
+	return false;
+}
+
 CTest::CTest(enum TestType type, const File & dir, const ExeSpace & exec) : root(dir), etype(type), test_pool() {
 	source = new TestSource(root);
 	space = new TestSpace(*this, *source, exec);
@@ -522,6 +604,8 @@ bool CTest::load() {
 		loader = new TestLoader_Totinfo(*space); break;
 	case flex:
 		loader = new TestLoader_Flex(*space); break;
+	case gzip:
+		loader = new TestLoader_Gzip(*space); break;
 	default:
 		loader = new TestLoader(*space);
 	}

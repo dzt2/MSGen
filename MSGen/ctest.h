@@ -286,6 +286,10 @@ public:
 	TestLoader_Gzip(const TestSpace & spac) : TestLoader(spac) {}
 	~TestLoader_Gzip() {}
 	std::string * next_inputs();
+private:
+	char get_tag(const std::string &, int &);
+	bool get_content(const std::string &, int &, std::string &);
+	bool is_test(const std::string &);
 };
 /* parser for sed test suite */
 class TestLoader_Sed : public TestLoader {
