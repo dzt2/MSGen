@@ -71,6 +71,49 @@ static void load_functions(CFuncProject & funcs, CMutant & cmutant,
 }
 
 // compute methods
+/* build up MSG */
+static void build_up_graph(MS_Graph & graph, ScoreProducer & producer, ScoreConsumer & consumer) {
+	time_t start, end;
+	//MSG_Build & builder = *(new MSG_Build_Classical(graph));
+	MSG_Build & builder = *(new MSG_Build_Fast(graph));
+	//MSG_Build & builder = *(new MSG_Build_Quick(graph));
+	builder.open(producer, consumer);
+	start = time(nullptr);
+	builder.build();
+	end = time(nullptr);
+	builder.close();
+	delete &builder;
+	std::cout << "\tUsing time: " << difftime(end, start) << " seconds...\n";
+}
+/* build up CSG from project data */
+static void load_cs_graph(const File & root, const CodeFile & cfile,
+	CMutant & cmutant, CTest & ctest, CTrace & ctrace, CScore & cscore, MS_Graph & graph) {
+	// load coverage information
+	CoverageSpace & covspac = ctrace.get_space();
+	MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+	MutantSet & mutants = *(mspace.create_set()); mutants.complement();
+	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+	covspac.add_file_coverage(cfile, tests); ctrace.load_coverage(cfile);
+	std::cout << "Coverage loading...\n";
+
+	// coverage vector producer
+	FileCoverage & filecov = covspac.get_file_coverage(cfile);
+	CoverageProducer cproducer(mspace, filecov);
+	CoverageConsumer cconsumer;
+
+	// score producer
+	ScoreSource & score_src = cscore.get_source(cfile);
+	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	CoverageScoreProducer producer(score_func, cproducer, cconsumer);
+	ScoreConsumer consumer(score_func);
+
+	// MS-Graph-Build
+	build_up_graph(graph, producer, consumer);
+
+	// release resource
+	ctest.delete_test_set(&tests);
+}
+/* compute dominator set by greedy algorithm */
 static void compute_dominator_set(const File & root, const CodeFile & cfile, CFuncProject & funcs,
 	CMutant & cmutant, CTest & ctest, CScore & cscore, MutSet & domset) {
 	// get set of mutants and tests in project
@@ -105,13 +148,12 @@ static void compute_dominator_set(const File & root, const CodeFile & cfile, CFu
 }
 
 
-
 // main method
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
-	TestType ttype = TestType::replace;
+	std::string prname = "bubble";
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));

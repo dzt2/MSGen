@@ -80,19 +80,22 @@ protected:
 
 public:
 	/* get the graph where the node is defined */
-	MS_Graph & get_graph() const { return graph; }
+	inline MS_Graph & get_graph() const { return graph; }
 	/* get the integer id of this node in graph */
-	long get_node_id() const { return id; }
+	inline long get_node_id() const { return id; }
+
 	/* get the mutants belong to this node */
-	MutantSet & get_mutants() const { return *mutants; }
+	inline MutantSet & get_mutants() const { return *mutants; }
+	/* whether the mutant is in this node */
+	inline bool has_mutant(Mutant::ID mid) const { return mutants->has_mutant(mid); }
 
 	/* score vector for mutants in this node */
-	const BitSeq & get_score_vector() const { return score_vector; }
+	inline const BitSeq & get_score_vector() const { return score_vector; }
 	/* score degree for mutants in this node */
-	BitSeq::size_t get_score_degree() const { return score_degree; }
+	inline BitSeq::size_t get_score_degree() const { return score_degree; }
 
-	const MSG_Port & get_in_port() const { return in_port; }
-	const MSG_Port & get_ou_port() const { return ou_port; }
+	inline const MSG_Port & get_in_port() const { return in_port; }
+	inline const MSG_Port & get_ou_port() const { return ou_port; }
 
 	/* create | delete | link_to */
 	friend class MS_Graph;

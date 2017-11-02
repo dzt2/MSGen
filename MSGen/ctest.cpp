@@ -633,7 +633,10 @@ bool TestLoader_Sed::get_content(const std::string & line, int & k, std::string 
 
 	return !content.empty();
 }
-
+std::string * TestLoader_Space::next_inputs() {
+	std::string * lineptr = this->lineptr; 
+	roll_next(); return lineptr;
+}
 
 CTest::CTest(enum TestType type, const File & dir, const ExeSpace & exec) : root(dir), etype(type), test_pool() {
 	source = new TestSource(root);
