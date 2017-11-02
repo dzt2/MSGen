@@ -78,6 +78,9 @@
     <ClInclude Include="cfunc.h">
       <Filter>Header Files\model</Filter>
     </ClInclude>
+    <ClInclude Include="domset.h">
+      <Filter>Header Files\graph</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bitseq.cpp">
@@ -130,6 +133,12 @@
     </ClCompile>
     <ClCompile Include="cfunc.cpp">
       <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="domset.cpp">
+      <Filter>Source Files\graph</Filter>
+    </ClCompile>
+    <ClCompile Include="domsettest.cpp">
+      <Filter>Source Files\driver</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

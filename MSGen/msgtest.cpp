@@ -616,6 +616,7 @@ static void ouput_block(MS_Graph & csg, MS_Graph & msg) {
 }
 
 /* main method */
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
@@ -690,3 +691,4 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/

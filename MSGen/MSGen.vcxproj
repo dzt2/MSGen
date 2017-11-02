@@ -121,6 +121,7 @@
     <ClInclude Include="ctest.h" />
     <ClInclude Include="ctext.h" />
     <ClInclude Include="ctrace.h" />
+    <ClInclude Include="domset.h" />
     <ClInclude Include="mclass.h" />
     <ClInclude Include="mgraph.h" />
     <ClInclude Include="sgraph.h" />
@@ -138,6 +139,8 @@
     <ClCompile Include="ctest.cpp" />
     <ClCompile Include="ctext.cpp" />
     <ClCompile Include="ctrace.cpp" />
+    <ClCompile Include="domset.cpp" />
+    <ClCompile Include="domsettest.cpp" />
     <ClCompile Include="gentest.cpp" />
     <ClCompile Include="mclass.cpp" />
     <ClCompile Include="mgraph.cpp" />

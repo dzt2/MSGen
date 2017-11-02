@@ -321,7 +321,7 @@ public:
 	/* get the root directory */
 	const File & get_root() const { return root; }
 	/* get the space of tests */
-	const TestSpace & get_space() const { return *space; }
+	TestSpace & get_space() const { return *space; }
 
 	/* load test cases from suite */
 	bool load();
