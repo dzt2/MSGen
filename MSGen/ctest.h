@@ -297,6 +297,10 @@ public:
 	TestLoader_Sed(const TestSpace & spac) : TestLoader(spac) {}
 	~TestLoader_Sed() {}
 	std::string * next_inputs();
+
+private:
+	char get_tag(const std::string &, int &);
+	bool get_content(const std::string &, int &, std::string &);
 };
 /* parser for space test suite */
 class TestLoader_Space : public TestLoader {

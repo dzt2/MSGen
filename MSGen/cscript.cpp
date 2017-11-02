@@ -56,6 +56,8 @@ void CScriptFile::generate() const {
 
 		// for flex script
 		// out << "rm lex.yy.c error lex.backup outputs\n";
+		// for sed script
+		// out << "rm tout\nrm *.wout\ntouch mytrash.wout\n";
 	}
 
 	/* flush and close */
@@ -144,6 +146,8 @@ void CTraceScriptFile::generate() const {
 
 		// for flex script
 		// out << "rm lex.yy.c error lex.backup outputs\n";
+		// for sed script
+		// out << "rm tout\nrm *.wout\ntouch mytrash.wout\n";
 
 		out << "\n";
 	} /* end while: output all commands for every test in space */

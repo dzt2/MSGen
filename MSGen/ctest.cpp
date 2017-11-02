@@ -573,6 +573,67 @@ bool TestLoader_Gzip::is_test(const std::string & inputstr) {
 	}
 	return false;
 }
+std::string * TestLoader_Sed::next_inputs() {
+	/* get next line */
+	std::string * lineptr = this->lineptr; roll_next();
+
+	/* format: ./sed.exe [-P] > tout \n cat tout *.wout > ../outputs/txx */
+	if (lineptr != nullptr) {
+		/* get the line and answer */
+		std::string & line = *lineptr;
+		std::string * ans = nullptr;
+		int k = 0, n = line.length();
+		char tag; std::string content;
+
+		/* get inputstr */
+		std::string inputstr = "";
+		while (k < n) {
+			tag = get_tag(line, k);
+			get_content(line, k, content);
+			if (tag == 'P') {
+				inputstr = content; break;
+			}
+		}
+
+		/* generate inputstr */
+		if (!inputstr.empty()) {
+			ans = new std::string();
+			*ans += inputstr; 
+			*ans += " > tout\n";
+			*ans += "cat tout *.wout ";
+		}
+
+		/* delete the line-string */
+		delete lineptr; return ans;
+	}
+	else return nullptr;
+}
+char TestLoader_Sed::get_tag(const std::string & line, int & k) {
+	int n = line.length();
+
+	while (k < n) {
+		if (line[k++] == '-') {
+			if (k < n) return line[k++];
+		}
+	}
+	return '\0';
+}
+bool TestLoader_Sed::get_content(const std::string & line, int & k, std::string & content) {
+	int n = line.length();
+	char ch; content = "";
+
+	while (k < n) {
+		if (line[k++] == '[') break;
+	}
+	while (k < n) {
+		ch = line[k++];
+		if (ch == ']') break;
+		else content += ch;
+	}
+
+	return !content.empty();
+}
+
 
 CTest::CTest(enum TestType type, const File & dir, const ExeSpace & exec) : root(dir), etype(type), test_pool() {
 	source = new TestSource(root);
@@ -606,6 +667,8 @@ bool CTest::load() {
 		loader = new TestLoader_Flex(*space); break;
 	case gzip:
 		loader = new TestLoader_Gzip(*space); break;
+	case sed:
+		loader = new TestLoader_Sed(*space); break;
 	default:
 		loader = new TestLoader(*space);
 	}
