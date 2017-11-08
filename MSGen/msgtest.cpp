@@ -468,6 +468,76 @@ static void print_block(MS_Graph & csg, MS_Graph & msg, std::ostream & out) {
 		delete (*(mbeg++)).second;
 	msg_args.clear();
 }
+/* print {value; nodes; mutants;}*/
+static void print_value(MS_Graph & msg, std::ostream & out) {
+	/* declarations */
+	std::map<MSG_Node *, size_t> node_value;
+	size_t n = msg.size(), k = 0, value;
+	std::set<MSG_Node *> subsummeds;
+
+	/* compute the value for each node */
+	for (k = 0; k < n; k++) {
+		/* get the next node from MSG */
+		MSG_Node & node = msg.get_node(k);
+		if (node.get_score_degree() == 0) continue;
+
+		/* calculate the value */
+		calculate_nodes_subsumed_by(node, subsummeds);
+		value = calculate_mutants_of_nodes(subsummeds);
+		value += node.get_mutants().number_of_mutants() - 1;
+
+		/* record the value */
+		node_value[&node] = value;
+	}
+	
+	/* count values */
+	std::map<size_t, size_t> value_nodes;
+	std::map<size_t, size_t> value_mutants;
+	auto beg = node_value.begin();
+	auto end = node_value.end();
+	while (beg != end) {
+		/* get next node and value */
+		MSG_Node & node = *(beg->first);
+		size_t value = beg->second;
+
+		/* insert */
+		if (value_nodes.count(value) == 0) 
+			value_nodes[value] = 0;
+		if (value_mutants.count(value) == 0)
+			value_mutants[value] = 0;
+
+		auto iter1 = value_nodes.find(value);
+		value_nodes[value] = (iter1->second) + 1;
+		auto iter2 = value_mutants.find(value);
+		value_mutants[value] = (iter2->second) 
+			+ node.get_mutants().number_of_mutants();
+
+		beg++;
+	}
+	node_value.clear();
+
+	/* output information */
+	out << "value\tnodes\tmutants\n";
+	auto beg1 = value_nodes.begin();
+	auto end1 = value_nodes.end();
+	while (beg1 != end1) {
+		// get the value of 
+		size_t value = beg1->first;
+		size_t nodes = beg1->second;
+		auto iter3 = value_mutants.find(value);
+		size_t mutants = iter3->second;
+
+		out << value << "\t" << nodes << 
+			"\t" << mutants << "\n";
+
+		beg1++;
+	}
+	out << std::endl;
+
+	/* clear */ 
+	value_nodes.clear();
+	value_mutants.clear();
+}
 
 /* analysis methods */
 static void evaluate_csg_nodes(MS_Graph & csg, MS_Graph & msg, std::map<MSG_Node *, double *> & ans) {
@@ -534,6 +604,7 @@ static void evaluate_csg_nodes(MS_Graph & csg, MS_Graph & msg, std::map<MSG_Node
 		delete (*(mbeg++)).second;
 	msglib.clear();
 }
+/* output the positive-negative proportions */
 static void ouput_block(MS_Graph & csg, MS_Graph & msg) {
 	std::map<MSG_Node *, double *> csglib;
 	evaluate_csg_nodes(csg, msg, csglib);
@@ -620,8 +691,8 @@ static void ouput_block(MS_Graph & csg, MS_Graph & msg) {
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "bubble";
-	TestType ttype = TestType::general;
+	std::string prname = "schedule2";
+	TestType ttype = TestType::schedule2;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -665,6 +736,8 @@ int main() {
 		print_graph(cgraph, out3); out3.close();
 		std::ofstream out4(root.get_path() + "/analysis/mblocks.txt");
 		print_block(cgraph, mgraph, out4); out4.close();
+		std::ofstream out5(root.get_path() + "/analysis/mvalues.txt");
+		print_value(mgraph, out5); out5.close();
 
 		// stdout analysis
 		ouput_block(cgraph, mgraph);

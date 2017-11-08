@@ -69,6 +69,27 @@ static void load_functions(CFuncProject & funcs, CMutant & cmutant,
 	}
 	std::cout << "}\n";
 }
+/* load score set to score matrix */
+static ScoreMatrix & load_score_set(const CodeFile & cfile, 
+	CMutant & cmutant, CTest & ctest, CScore & cscore) {
+	// get set of mutants and tests in project
+	MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+	MutantSet & mutants = *(mspace.create_set()); mutants.complement();
+	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+
+	// get score vector producer | consumer
+	ScoreSource & score_src = cscore.get_source(cfile);
+	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	FileScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+
+	ScoreMatrix * matrix = new ScoreMatrix(mspace, ctest.get_space());
+	matrix->add_score_vectors(producer, consumer);
+
+	// release resource
+	ctest.delete_test_set(&tests); mspace.delete_set(&mutants);
+
+	return *matrix;		// return dynamic matrix
+}
 
 // compute methods
 /* build up MSG */
@@ -84,6 +105,25 @@ static void build_up_graph(MS_Graph & graph, ScoreProducer & producer, ScoreCons
 	builder.close();
 	delete &builder;
 	std::cout << "\tUsing time: " << difftime(end, start) << " seconds...\n";
+}
+/* build up MSG from project data */
+static void load_ms_graph(const File & root, const CodeFile & cfile, CFuncProject & funcs,
+	CMutant & cmutant, CTest & ctest, CScore & cscore, MS_Graph & graph) {
+	// get set of mutants and tests in project
+	MutantSpace & mspace = cmutant.get_mutants_of(cfile);
+	MutantSet & mutants = *(mspace.create_set()); mutants.complement();
+	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
+
+	// get score vector producer | consumer
+	ScoreSource & score_src = cscore.get_source(cfile);
+	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
+	FileScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
+
+	// MS-Graph-Build
+	build_up_graph(graph, producer, consumer);
+
+	// release resource
+	ctest.delete_test_set(&tests); mspace.delete_set(&mutants);
 }
 /* build up CSG from project data */
 static void load_cs_graph(const File & root, const CodeFile & cfile,
@@ -114,46 +154,50 @@ static void load_cs_graph(const File & root, const CodeFile & cfile,
 	ctest.delete_test_set(&tests);
 }
 /* compute dominator set by greedy algorithm */
-static void compute_dominator_set(const File & root, const CodeFile & cfile, CFuncProject & funcs,
-	CMutant & cmutant, CTest & ctest, CScore & cscore, MutSet & domset) {
-	// get set of mutants and tests in project
-	MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-	MutantSet & mutants = *(mspace.create_set()); mutants.complement();
-	TestSet & tests = *(ctest.malloc_test_set()); tests.complement();
-
-	// get score vector producer | consumer
-	ScoreSource & score_src = cscore.get_source(cfile);
-	ScoreFunction & score_func = *(score_src.create_function(tests, mutants));
-	FileScoreProducer producer(score_func); ScoreConsumer consumer(score_func);
-
-	// get score function matrix 
-	ScoreMatrix matrix(mspace, ctest.get_space());
-	matrix.add_score_vectors(producer, consumer);
-
+static void compute_dominator_set_by_greedy(ScoreMatrix & matrix, MutSet & domset) {
 	// compute the dominator set by greedy algorithm
 	DomSetBuilder_Greedy builder;
 	time_t start = time(nullptr);
 	builder.open(matrix);
 	builder.build(domset);
 	time_t end = time(nullptr);
+	builder.close();
 
 	// efficiency analysis
 	size_t T = matrix.number_of_testings(), N = matrix.number_of_all_testings();
+	std::cout << "\n/------------ Greedy Algorithm -------------------/\n";
+	std::cout << "\tDominator-set: " << domset.size() << "\n";
 	std::cout << "\tExecution-rate: " << T << " / " << N << " (" << ((double)T) / ((double)N) << ")\n";
 	std::cout << "\tAnalysis time: " << builder.get_comparisons() << " times and " << difftime(end, start) << " seconds\n";
+	std::cout << "\tSelect-times: " << builder.get_selections() << "/" << matrix.get_mutant_space().number_of_mutants() << "\n";
+	std::cout << "/-------------------------------------------------/\n";
+}
+/* compute dominator set by coverage algorithm */
+static void compute_dominator_set_by_coverage(ScoreMatrix & matrix, MS_Graph & csg, MutSet & domset) {
+	// compute dominator set by coverage algorithm
+	DomSetBuilder_Blocks builder(csg);
+	time_t start = time(nullptr);
+	builder.open(matrix);
+	builder.build(domset);
+	time_t end = time(nullptr);
 	builder.close();
 
-	// release resource
-	ctest.delete_test_set(&tests); mspace.delete_set(&mutants);
+	// efficiency analysis
+	size_t T = matrix.number_of_testings(), N = matrix.number_of_all_testings();
+	std::cout << "\n/------------ Coverage Algorithm -------------------/\n";
+	std::cout << "\tDominator-set: " << domset.size() << "\n";
+	std::cout << "\tExecution-rate: " << T << " / " << N << " (" << ((double)T) / ((double)N) << ")\n";
+	std::cout << "\tAnalysis time: " << builder.get_comparisons() << " times and " << difftime(end, start) << " seconds\n";
+	std::cout << "\tSelect-times: " << builder.get_selections() << "/" << matrix.get_mutant_space().number_of_mutants() << "\n";
+	std::cout << "/-------------------------------------------------/\n";
 }
-
 
 // main method
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "bubble";
-	TestType ttype = TestType::general;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -180,13 +224,18 @@ int main() {
 		load_functions(funcs, cmutant, cfile, funclib);
 		std::cout << "Load file: \"" << cfile.get_file().get_path() << "\"\n";
 
-		// get dominator set
+		// load csg 
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
-		MutSet domset(mspace); 
-		compute_dominator_set(root, cfile, funcs, cmutant, ctest, cscore, domset);
+		MS_Graph cgraph(mspace);
+		load_cs_graph(root, cfile, cmutant, ctest, ctrace, cscore, cgraph);
 
-		// output
-		std::cout << "Found dominator " << domset.size() << "\n";
+		// get dominator set
+		MutSet domset(mspace); 
+		ScoreMatrix & matrix = load_score_set(cfile, cmutant, ctest, cscore);
+		std::cout << "Equivalent mutants: " << matrix.get_equivalents() << "\n";
+		compute_dominator_set_by_greedy(matrix, domset);
+		compute_dominator_set_by_coverage(matrix, cgraph, domset);
+		delete &matrix;
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";
@@ -200,4 +249,3 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
-

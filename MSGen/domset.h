@@ -58,16 +58,23 @@ public:
 		}
 		return count;
 	}
+	/* clear all the tested records */
+	inline void clear_all_testings() {
+		record->clear_bytes();
+	}
 	/* get the total number of testings (maximum) */
 	inline size_t number_of_all_testings() const {
 		return record->bit_number();
 	}
+	/* get number of equivalents */
+	inline size_t get_equivalents() const { return equivalents; }
 
 private:
 	MutantSpace & mspace;
 	TestSpace & tspace;
 	BitSeq * matrix;
 	BitSeq * record;
+	size_t equivalents;
 };
 /* set for mutant records */
 class MutSet {
@@ -124,8 +131,8 @@ public:
 			exit(CErrorType::InvalidArguments);
 		}
 		else {
-			ans.clear_mutants();
-			compute(ans);
+			matrix->clear_all_testings();
+			ans.clear_mutants(); compute(ans);
 		}
 	}
 	/* close the builder */
@@ -141,12 +148,15 @@ protected:
 class DomSetBuilder_Greedy : public DomSetBuilder {
 public:
 	/* create a builder based on greedy algorithm */
-	DomSetBuilder_Greedy() : DomSetBuilder(), compare_counts(0) {}
+	DomSetBuilder_Greedy() : DomSetBuilder(), 
+		compare_counts(0), select_times(0) {}
 	/* deconstructor */
 	~DomSetBuilder_Greedy() { }
 
 	/* get the number of comparisons */
 	inline size_t get_comparisons() const { return compare_counts; }
+	/* get the times to select mutants */
+	inline size_t get_selections() const { return select_times; }
 
 protected:
 	/* compute the dominator set based on classical algorithm */
@@ -165,6 +175,8 @@ protected:
 private:
 	/* number to compare two mutants to determine subsumption */
 	size_t compare_counts;
+	/* times to select mutant */
+	size_t select_times;
 
 };
 /* to determin dominator set based on coverage approach */
@@ -179,6 +191,8 @@ public:
 
 	/* get the number of comparisons */
 	inline size_t get_comparisons() const { return compare_counts; }
+	/* get the times to select mutants */
+	inline size_t get_selections() const { return select_times; }
 
 private:
 	/* graph for block dominance */
@@ -226,12 +240,15 @@ protected:
 		3) reput the mutants in Di back to the set M.
 	*/
 	void update_by_block(std::set<Mutant::ID> & M, MSG_Node & block);
-
+	/* sort the sequence of blocks by their dominance */
+	void sort_blocks_by(MS_Graph & csg, std::vector<MSG_Node *> & list);
+	/* get the node with minimal number of mutants in set */
+	MSG_Node * get_min_mutants(const std::set<MSG_Node *> & nodes);
 
 	// resource-methods
 	void clear_cache();
 private:
-	size_t compare_counts;
+	size_t compare_counts, select_times;
 	std::map<Mutant::ID, std::set<TestCase::ID> *> score_sets;
 	std::map<MSG_Node *, std::set<TestCase::ID> *> cover_sets;
 };

@@ -1,8 +1,10 @@
 #include "domset.h"
 
+/// score matrix
 void ScoreMatrix::add_score_vectors(
 	ScoreProducer & producer, ScoreConsumer & consumer) {
 	ScoreVector * svec; 
+	equivalents = 0;
 	while ((svec = producer.produce()) != nullptr) {
 		/* get the next score vector */
 		Mutant::ID mid = svec->get_mutant();
@@ -17,11 +19,15 @@ void ScoreMatrix::add_score_vectors(
 			matrix->set_bit(bias + i, bi);
 		}
 
+		if (svec->get_degree() == 0)
+			equivalents++;
+
 		/* delete score vector */
 		consumer.consume(svec); 
 	}
 }
 
+/// greedy algorithm
 void DomSetBuilder_Greedy::derive_score_set(Mutant::ID mid, std::set<TestCase::ID> & scoreset) {
 	TestSpace & tspace = matrix->get_test_space();
 	TestCase::ID tid, n = tspace.number_of_tests();
@@ -46,6 +52,8 @@ bool DomSetBuilder_Greedy::is_killed_by_all(Mutant::ID mj, const std::set<TestCa
 }
 void DomSetBuilder_Greedy::erase_subsummeds(Mutant::ID mi, std::set<Mutant::ID> & M) {
 	M.erase(mi);		// push
+
+	/* count select */ select_times++;
 
 	/* get score set of mi */
 	std::set<TestCase::ID> scoreset;
@@ -90,9 +98,10 @@ void DomSetBuilder_Greedy::compute(MutSet & ans) {
 	MutantSpace & mspace = ans.get_space();
 	Mutant::ID msize = mspace.number_of_mutants(), mid;
 	for (mid = 0; mid < msize; mid++) domset.insert(mid);
+	compare_counts = 0; select_times = 0;
 
 	/* compute the dominator set by elimination-greedly */
-	Mutant::ID mi; compare_counts = 0;
+	Mutant::ID mi; 
 	while (get_next_mutants(domset, records, mi)) {
 		records.insert(mi);
 		erase_subsummeds(mi, domset);
@@ -106,6 +115,8 @@ void DomSetBuilder_Greedy::compute(MutSet & ans) {
 		ans.add_mutant(*(beg++));
 }
 
+/// coverage-based algorithm
+/// inner-block computations
 void DomSetBuilder_Blocks::collect_mutant_of(const std::set<Mutant::ID> & M, MSG_Node & node, std::set<Mutant::ID> & mutants) {
 	mutants.clear();
 
@@ -232,7 +243,9 @@ void DomSetBuilder_Blocks::compute_inner_block(std::set<Mutant::ID> & M,
 	Mutant::ID mid;
 	std::set<Mutant::ID> records;
 	while (get_next_mutants(domset, records, mid)) {
-		records.insert(mid);	// record the mutant as visited
+		// record the mutant as visited
+		records.insert(mid);	
+		/* count select */ select_times++;
 
 		/* eliminate those subsummed by mid */
 		const std::set<Mutant::ID> & scoreset 
@@ -241,7 +254,7 @@ void DomSetBuilder_Blocks::compute_inner_block(std::set<Mutant::ID> & M,
 	} // end while
 	records.clear();
 }
-
+/// inter-block computations
 void DomSetBuilder_Blocks::get_feasible_domain(const 
 	std::set<TestCase::ID> & scoreset, std::set<MSG_Node *> & domain) {
 	domain.clear();				// initialization
@@ -278,8 +291,10 @@ void DomSetBuilder_Blocks::collect_mutants_of(const std::set<Mutant::ID> & M,
 	while (beg != end) {
 		Mutant::ID mid = *(beg++);
 		if (graph.has_node_of(mid)) {
-			MSG_Node & block = graph.get_node_of(mid);
-			if (blocks.count(&block)) mutants.insert(mid);
+			MSG_Node & block = 
+				graph.get_node_of(mid);
+			if (blocks.count(&block) > 0) 
+				mutants.insert(mid);
 		}
 	}
 }
@@ -301,6 +316,8 @@ void DomSetBuilder_Blocks::compute_inter_block(std::set<Mutant::ID> & M,
 
 		/* get the mutants in feasible domain from M */
 		std::set<Mutant::ID> mutants; collect_mutants_of(M, domain, mutants);
+		auto beg1 = mutants.begin(), end1 = mutants.end();
+		while (beg1 != end1) M.erase(*(beg1++));
 
 		/* eliminate those subsumed by mi in mutants */
 		erase_subsummeds(mi, mutants, scoreset);
@@ -309,6 +326,72 @@ void DomSetBuilder_Blocks::compute_inter_block(std::set<Mutant::ID> & M,
 		auto beg2 = mutants.begin(), end2 = mutants.end();
 		while (beg2 != end2) M.insert(*(beg2++));
 	} // emd wjo;e
+}
+/// coverage-based implementation
+MSG_Node * DomSetBuilder_Blocks::get_min_mutants(const std::set<MSG_Node *> & blocks) {
+	size_t number = UINT32_MAX;
+	auto beg = blocks.begin();
+	auto end = blocks.end();
+
+	MSG_Node * min = nullptr;
+	while(beg != end) {
+		MSG_Node * node = *(beg++);
+		if (node->get_mutants().number_of_mutants() < number) {
+			number = node->get_mutants().number_of_mutants();
+			min = node;
+		}
+	}
+	return min;
+}
+void DomSetBuilder_Blocks::sort_blocks_by(MS_Graph & cgraph, std::vector<MSG_Node *> & list) {
+	list.clear();
+
+	/* collect by degree */
+	std::map<size_t, std::set<MSG_Node *> *> degree_blocks;
+	std::vector<size_t> block_degrees; size_t n = cgraph.size();
+	for (size_t k = 0; k < n; k++) {
+		MSG_Node & block = cgraph.get_node(k);
+		if (block.get_score_degree() > 0) {
+			/* get the degree of this block */
+			size_t degree = block.get_score_degree();
+
+			/* insert for first time */
+			if (degree_blocks.count(degree) == 0) {
+				degree_blocks[degree] = new std::set<MSG_Node *>();
+				block_degrees.push_back(degree);
+			}
+
+			/* update the block set for degree */
+			auto iter = degree_blocks.find(degree);
+			(iter->second)->insert(&block);
+		}
+	}
+
+	/* sort by degree */
+	std::sort(block_degrees.begin(), block_degrees.end());
+	for (int i = 0; i < block_degrees.size(); i++) {
+		/* get nodes for the degree */
+		size_t degree = block_degrees[i];
+		auto iter = degree_blocks.find(degree);
+		std::set<MSG_Node *> & blocks = *(iter->second);
+
+		/* sort block by number of mutants */
+		/*while (!blocks.empty()) {
+			MSG_Node * next = 
+				get_min_mutants(blocks);
+			blocks.erase(next);
+			if (next != nullptr) 
+				list.push_back(next);
+		}*/
+		auto beg = blocks.begin();
+		auto end = blocks.end();
+		while (beg != end)
+			list.push_back(*(beg++));
+
+		delete &blocks;
+	}
+	degree_blocks.clear(); block_degrees.clear();
+
 }
 void DomSetBuilder_Blocks::update_by_block(std::set<Mutant::ID> & M, MSG_Node & block) {
 	if (block.get_score_degree() == 0) return;
@@ -326,7 +409,6 @@ void DomSetBuilder_Blocks::update_by_block(std::set<Mutant::ID> & M, MSG_Node & 
 void DomSetBuilder_Blocks::compute(MutSet & ans) {
 	/* initialization */
 	std::set<Mutant::ID> M; 
-	MSG_Node * root = nullptr;
 	MutantSpace & mspace = ans.get_space();
 	Mutant::ID msize = mspace.number_of_mutants();
 	for (Mutant::ID mid = 0; mid < msize; mid++) {
@@ -334,41 +416,28 @@ void DomSetBuilder_Blocks::compute(MutSet & ans) {
 			MSG_Node & block = graph.get_node_of(mid);
 			if (block.get_score_degree() > 0) 
 				M.insert(mid);
-			if (block.get_in_port().degree() == 0)
-				root = &block;
 		}
 	}
+	select_times = 0; compare_counts = 0;
 
-	/* compute by the block from top to down */
-	std::queue<MSG_Node *> tqueue; 
-	std::queue<MSG_Node *> list; 
-	std::set<MSG_Node *> records;
-	tqueue.push(root);
-	while (!tqueue.empty()) {
-		MSG_Node * block = 
-			tqueue.front(); tqueue.pop(); 
-
-		if(block->get_score_degree() > 0)
-			list.push(block);
-
-		const MSG_Port & port = block->get_ou_port();
-		for (int k = 0; k < port.degree(); k++) {
-			MSG_Edge & edge = port.get_edge(k);
-			MSG_Node & trg = edge.get_target();
-			if (records.count(&trg) == 0) {
-				records.insert(&trg);
-				tqueue.push(&trg);
-			}
-		}
-	}
+	/* sort block based on its dominance */
+	std::vector<MSG_Node *> list;
+	sort_blocks_by(graph, list);
 
 	/* compute by each block */
-	while (!list.empty()) {
-		MSG_Node & block = *(list.front());
-		update_by_block(M, block); list.pop();
+	int n = list.size();
+	for (int i = 0; i < n; i++) {
+		MSG_Node & block = *(list[i]);
+		update_by_block(M, block); 
 	}
-}
 
+	/* put into dominator set */
+	auto beg = M.begin();
+	auto end = M.end();
+	while (beg != end)
+		ans.add_mutant(*(beg++));
+}
+/// resource methods
 void DomSetBuilder_Blocks::clear_cache() {
 	auto beg1 = cover_sets.begin();
 	auto end1 = cover_sets.end();
