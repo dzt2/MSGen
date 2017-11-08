@@ -53,12 +53,12 @@ bool DomSetBuilder_Greedy::is_killed_by_all(Mutant::ID mj, const std::set<TestCa
 void DomSetBuilder_Greedy::erase_subsummeds(Mutant::ID mi, std::set<Mutant::ID> & M) {
 	M.erase(mi);		// push
 
-	/* count select */ select_times++;
-
 	/* get score set of mi */
 	std::set<TestCase::ID> scoreset;
 	derive_score_set(mi, scoreset);
 	if (scoreset.empty()) return;
+
+	/* count select */ select_times++;
 
 	/* compute those subsumed by mi */
 	std::set<Mutant::ID> erases;
@@ -245,11 +245,13 @@ void DomSetBuilder_Blocks::compute_inner_block(std::set<Mutant::ID> & M,
 	while (get_next_mutants(domset, records, mid)) {
 		// record the mutant as visited
 		records.insert(mid);	
-		/* count select */ select_times++;
+
+		/* get the score set of this mutant */
+		const std::set<Mutant::ID> & scoreset
+			= derive_score_set(coverset, mid);
+		if(!scoreset.empty()) select_times++;
 
 		/* eliminate those subsummed by mid */
-		const std::set<Mutant::ID> & scoreset 
-			= derive_score_set(coverset, mid);
 		erase_subsummeds(mid, domset, scoreset);
 	} // end while
 	records.clear();
