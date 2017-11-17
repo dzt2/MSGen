@@ -685,14 +685,113 @@ static void ouput_block(MS_Graph & csg, MS_Graph & msg) {
 	std::cout << "\tMut-AVG-Uty: " << MU_Pos << "\t" << MU_Neg << "\n";
 	std::cout << "/------------------------------------------/\n";
 }
+/* indistinguish(inner|dominated|others) direct(inner|dominated|others) */
+static void output_subsumption(MS_Graph & msg, MS_Graph & csg) {
+	/* counters */
+	size_t eq_inner = 0, eq_domat = 0, eq_other = 0;
+	size_t di_inner = 0, di_domat = 0, di_other = 0;
+
+	/* construct relations */
+	MSG_Relation relations(msg, csg);
+	const std::map<std::string, MSG_Pair *> & pairs = relations.get_pairs();
+
+	/* indistinguishable relations */
+	size_t msg_n = msg.size();
+	for (size_t i = 0; i < msg_n; i++) {
+		MSG_Node & node = msg.get_node(i);
+		if (relations.has_related_targets(node)) {
+			const std::set<MSG_Pair *> & pairs 
+				= relations.get_related_targets(node);
+			auto beg1 = pairs.begin(), end = pairs.end();
+			while (beg1 != end) {
+				MSG_Pair & pair1 = *(*(beg1++));
+				size_t mutants = pair1.get_mutants().number_of_mutants();
+				//eq_inner = eq_inner + mutants * (mutants - 1) / 2;
+				eq_inner = eq_inner + mutants - 1;
+
+				MSG_Node & B1 = pair1.get_target();
+				const BitSeq & bit1 = B1.get_score_vector();
+
+				for (auto beg2 = beg1; beg2 != end; beg2++) {
+					MSG_Pair & pair2 = *(*(beg2));
+					MSG_Node & B2 = pair2.get_target();
+					const BitSeq & bit2 = B2.get_score_vector();
+
+					if (bit1.subsume(bit2)) eq_domat++;
+					else if (bit2.subsume(bit1)) eq_domat++;
+					else eq_other++;
+				}
+
+				
+			}
+		}
+	}
+	
+	/* direct subsumption */
+	for (size_t i = 0; i < msg_n; i++) {
+		MSG_Node & node = msg.get_node(i);
+		if (node.get_score_degree() == 0) continue;
+		else if (relations.has_related_targets(node)) {
+			const std::set<MSG_Pair *> & src_blocks
+				= relations.get_related_targets(node);
+
+			const MSG_Port & port = node.get_ou_port();
+			for (int k = 0; k < port.degree(); k++) {
+				MSG_Edge & edge = port.get_edge(k);
+				MSG_Node & next = edge.get_target();
+				if (!relations.has_related_targets(next)) continue;
+
+				const std::set<MSG_Pair *> & trg_blocks
+					= relations.get_related_targets(next);
+
+				auto src_beg = src_blocks.begin();
+				auto src_end = src_blocks.end();
+				while (src_beg != src_end) {
+					MSG_Pair & src_pair = *(*(src_beg++));
+					size_t src_mutants = src_pair.
+						get_mutants().number_of_mutants();
+					MSG_Node & B1 = src_pair.get_target();
+					const BitSeq & C1 = B1.get_score_vector();
+
+					auto trg_beg = trg_blocks.begin();
+					auto trg_end = trg_blocks.end();
+					while (trg_beg != trg_end) {
+						MSG_Pair & trg_pair = *(*(trg_beg++));
+						size_t trg_mutants = trg_pair.
+							get_mutants().number_of_mutants();
+						MSG_Node & B2 = trg_pair.get_target();
+						const BitSeq & C2 = B2.get_score_vector();
+
+						if (&B1 == &B2)
+							di_inner++;
+						else if (C1.subsume(C2))
+							di_domat++;
+						else
+							di_other++;
+					}
+				}
+			}
+		}
+	}
+
+	/* output conclusions */
+	std::cout << "\n/---------- subsumption distribute ----------/\n";
+	std::cout << "\tEquivalence-inner: " << eq_inner << "\n";
+	std::cout << "\tEquivalence-domat: " << eq_domat << "\n";
+	std::cout << "\tEquivalence-other: " << eq_other << "\n";
+	std::cout << "\tDirectSubsm-inner: " << di_inner << "\n";
+	std::cout << "\tDirectSubsm-domat: " << di_domat << "\n";
+	std::cout << "\tDirectSubsm-other: " << di_other << "\n";
+	std::cout << "/---------------------------------------------/\n";
+
+}
 
 /* main method */
-/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "schedule2";
-	TestType ttype = TestType::schedule2;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -741,6 +840,7 @@ int main() {
 
 		// stdout analysis
 		ouput_block(cgraph, mgraph);
+		output_subsumption(mgraph, cgraph);
 
 		// correlations
 		// test subsumption graph for mutants
@@ -764,4 +864,3 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
-*/

@@ -91,6 +91,18 @@ static ScoreMatrix & load_score_set(const CodeFile & cfile,
 	return *matrix;		// return dynamic matrix
 }
 
+// analysis output
+static void print_eliminates(DomSetBuilder & builder, size_t init, std::ostream & out) {
+	out << "loops\teliminates\tremainders\tefficiency\n";
+	const std::vector<size_t> & eliminates = builder.get_eliminates();
+	for (int i = 0; i < eliminates.size(); i++) {
+		out << i << "\t" << eliminates[i] << "\t" 
+			<< init << "\t" << ((double) eliminates[i])/((double) init) << "\n";
+		init = init - eliminates[i];
+	}
+	out << std::endl;
+}
+
 // compute methods
 /* build up MSG */
 static void build_up_graph(MS_Graph & graph, ScoreProducer & producer, ScoreConsumer & consumer) {
@@ -161,6 +173,12 @@ static void compute_dominator_set_by_greedy(ScoreMatrix & matrix, MutSet & domse
 	builder.open(matrix);
 	builder.build(domset);
 	time_t end = time(nullptr);
+
+	size_t n = matrix.get_mutant_space().
+		number_of_mutants() - matrix.get_equivalents();
+	std::ofstream out("../../myefficiency.txt");
+	print_eliminates(builder, n, out); out.close();
+
 	builder.close();
 
 	// efficiency analysis
@@ -193,11 +211,12 @@ static void compute_dominator_set_by_coverage(ScoreMatrix & matrix, MS_Graph & c
 }
 
 // main method
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
-	TestType ttype = TestType::replace;
+	std::string prname = "Calendar";
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -249,3 +268,4 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/

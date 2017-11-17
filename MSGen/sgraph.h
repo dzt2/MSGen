@@ -408,6 +408,7 @@ public:
 
 	/* number of pairs between two graph */
 	size_t size_of() const { return pairs.size(); }
+	const std::map<std::string, MSG_Pair *> & get_pairs() const { return pairs; }
 
 private:
 	MS_Graph & source;

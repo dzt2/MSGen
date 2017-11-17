@@ -136,12 +136,16 @@ public:
 		}
 	}
 	/* close the builder */
-	void close() { matrix = nullptr; }
+	void close() { matrix = nullptr; elist.clear(); }
+
+	/* get the number of eliminated mutants each loop */
+	inline const std::vector<size_t> & get_eliminates() const { return elist; }
 
 protected:
 	/* score function as basis for computation */
 	ScoreMatrix * matrix;
-	
+	/* list to record the number of mutants eliminated by each loop */
+	std::vector<size_t> elist;
 };
 
 /* to determine dominator set based on classical greedy algorithm */

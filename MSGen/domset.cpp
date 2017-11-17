@@ -1,4 +1,34 @@
 #include "domset.h"
+#include <cstdlib>
+#include <time.h>
+
+/// static tool method
+static void random_sort(std::vector<Mutant::ID> & list) {
+	size_t limit = list.size();
+	while (limit > 1) {
+		/* random index */
+		srand((unsigned)time(nullptr));
+		int next = rand() % limit;
+		/* swap */
+		auto temp = list[next];
+		list[next] = list[limit - 1];
+		list[limit - 1] = temp;
+		/* to next */ limit--;
+	}
+}
+static void random_sort(std::vector<MSG_Node *> & list) {
+	size_t limit = list.size();
+	while (limit > 1) {
+		/* random index */
+		srand((unsigned)time(nullptr));
+		int next = rand() % limit;
+		/* swap */
+		auto temp = list[next];
+		list[next] = list[limit - 1];
+		list[limit - 1] = temp;
+		/* to next */ limit--;
+	}
+}
 
 /// score matrix
 void ScoreMatrix::add_score_vectors(
@@ -75,13 +105,17 @@ void DomSetBuilder_Greedy::erase_subsummeds(Mutant::ID mi, std::set<Mutant::ID> 
 	while (beg != end)
 		M.erase(*(beg++));
 
+	/* record efficiency */ 
+	elist.push_back(erases.size());
+
 	M.insert(mi);		// pope
 }
 bool DomSetBuilder_Greedy::get_next_mutants(
 	const std::set<Mutant::ID> & M, 
 	const std::set<Mutant::ID> & records,
 	Mutant::ID & next) {
-	auto beg = M.begin(), end = M.end();
+	auto beg = M.begin();
+	auto end = M.end();
 	while (beg != end) {
 		next = *(beg++);
 		if (records.count(next) == 0)
@@ -205,6 +239,9 @@ void DomSetBuilder_Blocks::erase_subsummeds(Mutant::ID mid,
 			if (is_killed_by_all(mid, scoreset))
 				trash.insert(mid);
 		}
+
+		/* record efficiency */
+		elist.push_back(trash.size());
 
 		/* eliminate those subsummed by mid */
 		beg = trash.begin();
@@ -377,20 +414,18 @@ void DomSetBuilder_Blocks::sort_blocks_by(MS_Graph & cgraph, std::vector<MSG_Nod
 		auto iter = degree_blocks.find(degree);
 		std::set<MSG_Node *> & blocks = *(iter->second);
 
-		/* sort block by number of mutants */
-		/*while (!blocks.empty()) {
-			MSG_Node * next = 
-				get_min_mutants(blocks);
-			blocks.erase(next);
-			if (next != nullptr) 
-				list.push_back(next);
-		}*/
+		/* get the list of sorted line */
+		std::vector<MSG_Node *> vecs;
 		auto beg = blocks.begin();
 		auto end = blocks.end();
 		while (beg != end)
-			list.push_back(*(beg++));
-
+			vecs.push_back(*(beg++));
 		delete &blocks;
+
+		/* randomly sort the nodes into list */
+		random_sort(vecs);
+		for (int k = 0; k < vecs.size(); k++)
+			list.push_back(vecs[k]);
 	}
 	degree_blocks.clear(); block_degrees.clear();
 
@@ -451,9 +486,3 @@ void DomSetBuilder_Blocks::clear_cache() {
 	while (beg2 != end2) 
 		delete ((beg2++)->second);
 }
-
-
-
-
-
-
