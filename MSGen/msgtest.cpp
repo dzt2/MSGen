@@ -321,16 +321,45 @@ static void calculate_nodes_and_mutants(MSG_Node & node, size_t ans[4]) {
 	ans[2] = subsumings.size();
 	ans[3] = calculate_mutants_of_nodes(subsumings);
 }
+/* calculate the set of subsuming mutants */
+static void calculate_subsuming_nodes(MS_Graph & graph, std::set<long> & subsumings) {
+	// get equivalent ones
+	subsumings.clear();
+	size_t k, n = graph.size(), e;
+	for (e = n, k = 0; k < n; k++) {
+		MSG_Node & node = graph.get_node(k);
+		const MSG_Port & port = node.get_in_port();
+
+		if (node.get_score_degree() == 0) {
+			e = k; break;
+		}
+		else if (port.degree() == 0) {
+			subsumings.insert(k);
+		}
+	}
+
+	// compute subsumings 
+	if (e != n) {
+		MSG_Node & root = graph.get_node(e);
+		const MSG_Port & port = root.get_ou_port();
+		for (int i = 0; i < port.degree(); i++) {
+			MSG_Edge & edge = port.get_edge(i);
+			MSG_Node & next = edge.get_target();
+			subsumings.insert(next.get_node_id());
+		}
+	}
+}
 
 /* file-output methods */
 /* print the information of mutants in the graph */
-static void print_mutants(const MS_Graph & msg, const MS_Graph & csg, std::ostream & out) {
+static void print_mutants(const MS_Graph & msg, const MS_Graph & csg, 
+	const std::set<long> & subsumings, std::ostream & out) {
 	MutantSpace & mspace = msg.get_space();
 	Mutant::ID n = mspace.number_of_mutants();
 	const CodeFile & cfile = mspace.get_code_file();
 	const TextBuild & text = *(cfile.get_text());
 
-	out << "id\toperator\tline\torigin\treplace\tmsg_node\tcsg_node\n";
+	out << "id\ttype\toperator\tline\torigin\treplace\tmsg_node\tcsg_node\n";
 	for (Mutant::ID mid = 0; mid < n; mid++) {
 		if (msg.has_node_of(mid) && csg.has_node_of(mid)) {
 			MSG_Node & mnode = msg.get_node_of(mid);
@@ -345,7 +374,15 @@ static void print_mutants(const MS_Graph & msg, const MS_Graph & csg, std::ostre
 				std::string replace = mutation.get_replacement();
 				trim_spaces(origin); trim_spaces(replace);
 
-				out << mid << "\t" << op << "\t";
+				out << mid << "\t";
+
+				if (mnode.get_score_degree() == 0)
+					out << "equivalent\t";
+				else if (subsumings.count(mnode.get_node_id()) > 0)
+					out << "subsuming\t";
+				else out << "subsummed\t";
+
+				out << op << "\t";
 				out << text.lineOfIndex(loc.get_bias()) << "\t";
 				out << origin << "\t" << replace << "\t";
 				out << mnode.get_node_id() << "\t";
@@ -826,9 +863,13 @@ int main() {
 		load_ms_graph(root, cfile, funcs, cmutant, ctest, cscore, mgraph);
 		load_cs_graph(root, cfile, cmutant, ctest, ctrace, cscore, cgraph);
 
+		// calculate
+		std::set<long> subsumings;
+		calculate_subsuming_nodes(mgraph, subsumings);
+
 		// output information about mutants
 		std::ofstream out1(root.get_path() + "/analysis/mutants.txt");
-		print_mutants(mgraph, cgraph, out1); out1.close();
+		print_mutants(mgraph, cgraph, subsumings, out1); out1.close();
 		std::ofstream out2(root.get_path() + "/analysis/msgraph.txt");
 		print_graph(mgraph, out2); out2.close();
 		std::ofstream out3(root.get_path() + "/analysis/csgraph.txt");
