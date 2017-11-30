@@ -1118,3 +1118,125 @@ void MSG_Relation::clear_all() {
 	trg_src.clear();
 }
 
+void MSG_Tester::gen_tests(const std::set<MSG_Node *> & nodes, TestSet & tests) {
+	// initialization
+	tests.clear();
+	std::set<MSG_Node *> tnodes(nodes);
+
+	while (!tnodes.empty()) {
+		// get next node in set 
+		MSG_Node & node = *(*(tnodes.begin()));
+		tnodes.erase(&node);
+		if (node.get_score_degree() == 0) continue;
+		const BitSeq & bits = node.get_score_vector();
+
+		// select the next test
+		TestCase::ID tid;
+		for (tid = 0; tid < bits.bit_number(); tid++) {
+			if (bits.get_bit(tid) == BIT_1) {
+				tests.add_test(tid); break;
+			}
+		}
+
+		// remove killed nodes
+		if (tid < bits.bit_number())
+			eliminate(tid, tnodes);
+	}
+}
+void MSG_Tester::gen_tests(const std::set<Mutant::ID> 
+	& mutants, TestSet & tests) {
+	// collect requirements
+	std::set<MSG_Node *> nodes;
+	auto beg = mutants.begin();
+	auto end = mutants.end();
+	while (beg != end) {
+		Mutant::ID mid = *(beg++);
+		if (graph->has_node_of(mid)) {
+			MSG_Node & node = 
+				graph->get_node_of(mid);
+			nodes.insert(&node);
+		}
+	}
+
+	// generate tests
+	gen_tests(nodes, tests);
+}
+void MSG_Tester::eliminate(TestCase::ID tid, std::set<MSG_Node *> & nodes) {
+	std::set<MSG_Node *> removed;
+	auto beg = nodes.begin();
+	auto end = nodes.end();
+	while (beg != end) {
+		MSG_Node * node = *(beg++);
+		const BitSeq & bits = node->get_score_vector();
+		if (bits.get_bit(tid) == BIT_1) 
+			removed.insert(node);
+	}
+
+	beg = removed.begin(), end = removed.end();
+	while (beg != end) nodes.erase(*(beg++));
+}
+bool MSG_Tester::is_killed(const MSG_Node & node, const TestSet & tests) {
+	if (node.get_score_degree() == 0) return false;
+	else {
+		const BitSeq & scores = node.get_score_vector();
+		const BitSeq & testes = tests.get_set_vector();
+		BitSeq result(scores); result.conjunct(testes);
+		return !result.all_zeros();
+	}
+}
+double MSG_Tester::eval_score(const TestSet & tests) {
+	size_t total = 0, killed = 0;
+	long n = graph->size(), k;
+	for (k = 0; k < n; k++) {
+		MSG_Node & node = graph->get_node(k);
+		if (node.get_score_degree() == 0) continue;
+
+		size_t num = node.get_mutants().number_of_mutants();
+		total += num; 
+		if (is_killed(node, tests)) killed += num;
+	}
+	return ((double)killed) / ((double)total);
+}
+void MSG_Tester::collect_roots(std::set<MSG_Node *> &roots) {
+	roots.clear();
+
+	long k, n = graph->size();
+	MSG_Node * eqs = nullptr;
+	for (k = 0; k < n; k++) {
+		MSG_Node & node = graph->get_node(k);
+		if (node.get_score_degree() == 0) {
+			eqs = &node; break;
+		}
+		else if (node.get_in_port().degree() == 0) {
+			roots.insert(&node);
+		}
+	}
+
+	if (eqs != nullptr) {
+		roots.clear();
+		const MSG_Port & port = eqs->get_ou_port();
+		for (int k = 0; k < port.degree(); k++) {
+			MSG_Edge & edge = port.get_edge(k);
+			MSG_Node & next = edge.get_target();
+			roots.insert(&next);
+		}
+	}
+}
+double MSG_Tester::eval_dom_score(const TestSet & tests) {
+	std::set<MSG_Node *> roots;
+	collect_roots(roots);
+
+	size_t killed = 0;
+	auto beg = roots.begin();
+	auto end = roots.end();
+	while (beg != end) {
+		MSG_Node & node = *(*(beg++));
+		if (is_killed(node, tests)) killed++;
+	}
+
+	return ((double)killed) / ((double)roots.size());
+}
+
+
+
+

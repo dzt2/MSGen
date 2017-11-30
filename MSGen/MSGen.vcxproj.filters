@@ -140,5 +140,8 @@
     <ClCompile Include="domsettest.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
+    <ClCompile Include="msgtest2.cpp">
+      <Filter>Source Files\driver</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

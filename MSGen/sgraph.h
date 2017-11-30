@@ -24,6 +24,7 @@ class MSG_Build;
 
 class MSG_Pair;
 class MSG_Relation;
+class MSG_Tester;
 
 /* edge in MSG */
 class MSG_Edge {
@@ -416,4 +417,26 @@ private:
 	std::map<std::string, MSG_Pair *> pairs;
 	std::map<long, std::set<MSG_Pair *> *> src_trg;
 	std::map<long, std::set<MSG_Pair *> *> trg_src;
+};
+
+/* To generate minimal tests for given mutants in MSG */
+class MSG_Tester {
+public:
+	MSG_Tester() : graph(nullptr) {}
+	~MSG_Tester() { close(); }
+
+	void open(MS_Graph & g) { close(); graph = &g; }
+	void gen_tests(const std::set<Mutant::ID> & mutants, TestSet & tests);
+	void gen_tests(const std::set<MSG_Node *> & msnodes, TestSet & tests);
+	double eval_score(const TestSet & tests);
+	double eval_dom_score(const TestSet & tests);
+	void close() { graph = nullptr; }
+
+private:
+	MS_Graph * graph;
+
+protected:
+	void eliminate(TestCase::ID tid, std::set<MSG_Node *> & nodes);
+	bool is_killed(const MSG_Node & node, const TestSet & tests);
+	void collect_roots(std::set<MSG_Node *> &roots);
 };

@@ -142,7 +142,8 @@ static void classify_by_operators(MutantSpace & space, std::map<Mutant::ID, std:
 	}
 }
 /* classify by functions */
-static void classify_by_functions(MutantSpace & space, const CFunctionSpace & funcs, std::map<Mutant::ID, std::string> & typelib) {
+static void classify_by_functions(MutantSpace & space, const CFunctionSpace & funcs, 
+	std::map<Mutant::ID, std::string> & typelib) {
 	typelib.clear(); std::string funcname;
 	Mutant::ID mid, n = space.number_of_mutants();
 	for (mid = 0; mid < n; mid++) {
@@ -322,7 +323,7 @@ static void calculate_nodes_and_mutants(MSG_Node & node, size_t ans[4]) {
 	ans[3] = calculate_mutants_of_nodes(subsumings);
 }
 /* calculate the set of subsuming mutants */
-static void calculate_subsuming_nodes(MS_Graph & graph, std::set<MSG_Node *> & subsumings) {
+static void calculate_subsuming_nodes(MS_Graph & graph, std::set<long> & subsumings) {
 	// get equivalent ones
 	subsumings.clear();
 	size_t k, n = graph.size(), e;
@@ -334,7 +335,7 @@ static void calculate_subsuming_nodes(MS_Graph & graph, std::set<MSG_Node *> & s
 			e = k; break;
 		}
 		else if (port.degree() == 0) {
-			subsumings.insert(&node);
+			subsumings.insert(k);
 		}
 	}
 
@@ -345,121 +346,29 @@ static void calculate_subsuming_nodes(MS_Graph & graph, std::set<MSG_Node *> & s
 		for (int i = 0; i < port.degree(); i++) {
 			MSG_Edge & edge = port.get_edge(i);
 			MSG_Node & next = edge.get_target();
-			subsumings.insert(&next);
+			subsumings.insert(next.get_node_id());
 		}
 	}
 }
-/* get the average utility of each mutant in set */
-static double calculate_mutants_utility(MS_Graph & graph, const std::set<Mutant::ID> & mutants) {
-	std::set<MSG_Node *> nodes;
-	auto beg = mutants.begin();
-	auto end = mutants.end();
-
-	double utility = 0.0;
-	while (beg != end) {
-		Mutant::ID mid = *(beg++);
-		if (graph.has_node_of(mid)) {
-			MSG_Node & node = graph.get_node_of(mid);
-			std::set<MSG_Node *> subsumings;
-			std::set<MSG_Node *> subsummeds;
-			calculate_nodes_subsumed_by(node, subsummeds);
-			calculate_nodes_subsummings(node, subsumings);
-			size_t A = subsummeds.size();
-			size_t B = subsumings.size();
-			if (A == 0 && B == 0) continue;
-			double use = ((double)A) / ((double)(A + B));
-			utility = utility + use;
-		}
-	}
-
-	return utility / mutants.size();
-}
-
-/* file-output methods */
-/* print the information of mutants in the graph */
-static void print_mutants(const MS_Graph & msg, const MS_Graph & csg, 
-	const std::set<MSG_Node *> & subsumings, std::ostream & out) {
-	MutantSpace & mspace = msg.get_space();
-	Mutant::ID n = mspace.number_of_mutants();
-	const CodeFile & cfile = mspace.get_code_file();
-	const TextBuild & text = *(cfile.get_text());
-
-	out << "id\ttype\toperator\tline\torigin\treplace\tmsg_node\tcsg_node\n";
-	for (Mutant::ID mid = 0; mid < n; mid++) {
-		if (msg.has_node_of(mid) && csg.has_node_of(mid)) {
-			MSG_Node & mnode = msg.get_node_of(mid);
-			MSG_Node & cnode = csg.get_node_of(mid);
-			if (mnode.get_score_degree() != 0) {
-				Mutant & mutant = mspace.get_mutant(mid);
-				const std::string & op = mutant.get_operator();
-				const Mutation & mutation = mutant.
-					get_mutation(mutant.get_orders() - 1);
-				const CodeLocation & loc = mutation.get_location();
-				std::string origin = loc.get_text_at();
-				std::string replace = mutation.get_replacement();
-				trim_spaces(origin); trim_spaces(replace);
-
-				out << mid << "\t";
-
-				if (mnode.get_score_degree() == 0)
-					out << "equivalent\t";
-				else if (subsumings.count(&mnode) > 0)
-					out << "subsuming\t";
-				else out << "subsummed\t";
-
-				out << op << "\t";
-				out << text.lineOfIndex(loc.get_bias()) << "\t";
-				out << origin << "\t" << replace << "\t";
-				out << mnode.get_node_id() << "\t";
-				out << cnode.get_node_id() << "\n";
-			}
-		}
-	}
-	out << std::endl;
-}
-/* print the information of nodes in graph */
-static void print_graph(const MS_Graph & graph, std::ostream & out) {
-	std::set<MSG_Node *> subsumings;
-	std::set<MSG_Node *> subsummeds;
-	long n = graph.size();
-
-	out << "node\tmutants\tdegree\tsubsuming-nodes\tsubsuming-mutants\tsubsummed-nodes\tsubsummed-mutants\tnext_set\n";
-	for (long id = 0; id < n; id++) {
-		MSG_Node & node = graph.get_node(id);
+/* calculate the nodes and their utility */
+static void calculate_node_utility(const MS_Graph & graph, std::map<MSG_Node *, double> & ans) {
+	long n = graph.size(); ans.clear();
+	std::set<MSG_Node *> subsumings, subsumeds;
+	for (long k = 0; k < n; k++) {
+		MSG_Node & node = graph.get_node(k);
 		if (node.get_score_degree() > 0) {
-			out << id << "\t";
-			out << node.get_mutants().number_of_mutants() << "\t";
-			out << node.get_score_degree() << "\t";
-			
-			calculate_nodes_subsumed_by(node, subsummeds);
+			calculate_nodes_subsumed_by(node, subsumeds);
 			calculate_nodes_subsummings(node, subsumings);
-			size_t subsummeds_num = calculate_mutants_of_nodes(subsummeds);
-			size_t subsumings_num = calculate_mutants_of_nodes(subsumings);
-			out << subsumings.size() << "\t";
-			out << subsumings_num << "\t";
-			out << subsummeds.size() << "\t";
-			out << subsummeds_num << "\t";
-
-			const MSG_Port & port = node.get_ou_port();
-			for (int k = 0; k < port.degree(); k++) {
-				MSG_Edge & edge = port.get_edge(k);
-				MSG_Node & trg = edge.get_target();
-				out << trg.get_node_id() << "; ";
-			}
-
-			out << "\n";
+			double subsumings_num = calculate_mutants_of_nodes(subsumings);
+			double subsummeds_num = calculate_mutants_of_nodes(subsumeds);
+			double utility = subsummeds_num / (subsummeds_num + subsumings_num);
+			ans[&node] = utility;
 		}
 	}
-	out << std::endl;
 }
-/* print {degree-utility-subsumed} */
-static void print_block(MS_Graph & csg, MS_Graph & msg, std::ostream & out) {
-	/* title */
-	out << "blockid\tcover-height\tcover-mutants\tcover-utility\t";
-	out << "msg-avg-degree\tmsg-avg-subsummeds\tmsg-avg-utility\t";
-	out << "mut-avg-degree\tmut-avg-subsummeds\tmut-avg-utility\n";
 
-	/* get the arguments for each MSG-node */
+static void calculate_block_utility(MS_Graph & csg,MS_Graph & msg, std::map<MSG_Node *, double> & ans) {
+	ans.clear();
 	std::map<MSG_Node *, size_t *> msg_args;
 	size_t msg_n = msg.size();
 	for (size_t i = 0; i < msg_n; i++) {
@@ -478,21 +387,19 @@ static void print_block(MS_Graph & csg, MS_Graph & msg, std::ostream & out) {
 		MSG_Node & cnode = csg.get_node(i);
 		if (relations.has_related_targets(cnode)) {
 			/* blockid */
-			out << cnode.get_node_id() << "\t";
 			
+
 			/* coverage-argument */
 			calculate_nodes_and_mutants(cnode, args);
-			out << args[0] << "\t" << args[1] << '\t';
-			out << ((double)args[0]) / ((double)(args[0] + args[2])) << "\t";
+			
 
 			/* get pairs */
 			const std::set<MSG_Pair *> & pairs = relations.get_related_targets(cnode);
-			double CN = pairs.size(), MN = cnode.get_mutants().number_of_mutants();
+			double CN = pairs.size(), MN = 0;
 
 			/* calculate mutant arguments */
-			double AD = 0.0, AS = 0.0, AU = 0.0;
-			double MD = 0.0, MS = 0.0, MU = 0.0;
-			double CD = 0.0, CS = 0.0, CU = 0.0;
+			double  MU = 0.0;
+			double  CU = 0.0;
 			auto beg = pairs.begin(), end = pairs.end();
 			while (beg != end) {
 				MSG_Pair & pair = *(*(beg++));
@@ -500,28 +407,19 @@ static void print_block(MS_Graph & csg, MS_Graph & msg, std::ostream & out) {
 				MSG_Node & mnode = pair.get_target();
 				if (msg_args.count(&mnode) > 0) {
 					size_t * margs = (msg_args.find(&mnode))->second;
-
 					/* current arguments */
-					CD = mnode.get_score_degree(); CS = margs[1];
-					CU = ((double)margs[0]) / ((double)(margs[0] + margs[2]));
-
+					CU = ((double)margs[1]) / ((double)(margs[1] + margs[3]));
 					/* calculate the average-arguments */
-					AD += CD, AS += CS, AU += CU;
-					MD += CD * PN / MN; 
-					MS += CS * PN / MN;
-					MU += CU * PN / MN;
+					MU += CU * PN;
+					MN += PN;
 				}
-			} // end while
+			} 
 
-			/* calculate average arguments */
-			AD = AD / CN; AS = AS / CN; AU = AU / CN;
+			MU = MU / MN;
+			ans[&cnode] = MU;
+		} 
+	} 
 
-			/* output arguments */
-			out << AD << "\t" << AS << "\t" << AU << "\t";
-			out << MD << "\t" << MS << "\t" << MU << "\n";
-		} // end if
-	} // end for 
-	out << std::endl;
 
 	/* delete the arguments for MSG nodes */
 	auto mbeg = msg_args.begin();
@@ -529,7 +427,197 @@ static void print_block(MS_Graph & csg, MS_Graph & msg, std::ostream & out) {
 	while (mbeg != mend)
 		delete (*(mbeg++)).second;
 	msg_args.clear();
+
 }
+/* calculate the mutants and their utility */
+static void calculate_mutants_utility(const MS_Graph & graph, std::map<Mutant::ID, double> & ans) {
+	std::map<MSG_Node *, double> node_utility;
+	calculate_node_utility(graph, node_utility);
+
+	MutantSpace & mspace = graph.get_space();
+	Mutant::ID n = mspace.number_of_mutants();
+	for (Mutant::ID mid = 0; mid < n; mid++) {
+		if (graph.has_node_of(mid)) {
+			MSG_Node & node = graph.get_node_of(mid);
+			if (node_utility.count(&node) > 0) {
+				auto pair = node_utility.find(&node);
+				double utility = pair->second;
+				ans[mid] = utility;
+			}
+		}
+	}
+}
+
+/* file-output methods */
+/* print the information of mutants in the graph */
+static void print_mutants(const MS_Graph & msg, const MS_Graph & csg, 
+	const std::set<long> & subsumings,bool printall, std::ostream & out) {
+	MutantSpace & mspace = msg.get_space();
+	Mutant::ID n = mspace.number_of_mutants();
+	const CodeFile & cfile = mspace.get_code_file();
+	const TextBuild & text = *(cfile.get_text());
+
+	std::map<Mutant::ID, double> mutant_utility;
+	calculate_mutants_utility(msg, mutant_utility);
+	if (printall) {
+		out << "id\ttype\toperator\tline\torigin\treplace\tmsg_node\tcsg_node\tutility\n";
+	}
+	else {
+		out << "id\toperator\tline\torigin\treplace\tmsg_node\tcsg_node\tutility\n";
+	}
+	for (Mutant::ID mid = 0; mid < n; mid++) {
+		
+		if (msg.has_node_of(mid) && csg.has_node_of(mid)) {     
+			MSG_Node & mnode = msg.get_node_of(mid);
+			if (printall || !printall&&subsumings.count(mnode.get_node_id()) > 0) {
+				MSG_Node & cnode = csg.get_node_of(mid);
+				if (mnode.get_score_degree() != 0 && cnode.get_score_degree() != 0) {
+
+					auto iter = mutant_utility.find(mid);
+					double utility = iter->second;
+
+					Mutant & mutant = mspace.get_mutant(mid);
+					const std::string & op = mutant.get_operator();
+					const Mutation & mutation = mutant.
+						get_mutation(mutant.get_orders() - 1);
+					const CodeLocation & loc = mutation.get_location();
+					std::string origin = loc.get_text_at();
+					std::string replace = mutation.get_replacement();
+					trim_spaces(origin); trim_spaces(replace);
+
+					out << mid << "\t";
+
+					if (mnode.get_score_degree() == 0)
+						out << "equivalent\t";
+					else if (subsumings.count(mnode.get_node_id()) > 0)
+						out << "subsuming\t";
+					else out << "subsummed\t";
+
+					out << op << "\t";
+					out << text.lineOfIndex(loc.get_bias()) << "\t";
+					out << origin << "\t" << replace << "\t";
+					out << mnode.get_node_id() << "\t";
+					out << cnode.get_node_id() << "\t";
+					out << utility << "\n";
+				}
+			}
+
+		}
+	}
+	out << std::endl;
+}
+
+static void print_ms_edges(const MS_Graph & graph, std::ostream & out) { 
+	out << "digraph G{\n" ;
+	long mid, n = graph.size();
+	for (mid = 0; mid < n; mid++) {
+		MSG_Node & src = graph.get_node(mid);
+		if (src.get_score_degree() > 0) {
+		const MSG_Port & port = src.get_ou_port();
+		for (int k = 0; k < port.degree(); k++) {
+			MSG_Edge & edge = port.get_edge(k);
+			MSG_Node & trg = edge.get_target();
+			out << src.get_node_id() <<
+				"  ->  " << trg.get_node_id() << "\n";
+		}
+	}
+	}
+	out << "}";
+	out << std::endl;
+} 
+
+static void print_cblock_edges(MS_Graph & cgraph, MS_Graph & mgraph, std::ostream & out) {
+
+	std::map<MSG_Node *, double> block_utility;
+	calculate_block_utility(cgraph, mgraph, block_utility);
+	out << "digraph G{\n";
+	out << "node[color=lightblue2,style=filled];\n";
+	long mid, n = cgraph.size();
+
+	for (mid = 0; mid < n; mid++) {
+		MSG_Node & src = cgraph.get_node(mid);
+		double srcutility;
+		if (src.get_score_degree() > 0) {
+
+			// get utility for source node
+			auto iter = block_utility.find(&src);
+			if (iter != block_utility.end()) {
+				srcutility = iter->second;
+			}
+			else srcutility = 0.0;
+
+			out << src.get_node_id() << "[label=\"id=" << 
+				src.get_node_id() << ",uti=" << srcutility << "\"]\n";
+			const MSG_Port & port = src.get_ou_port();
+			for (int k = 0; k < port.degree(); k++) {
+				MSG_Edge & edge = port.get_edge(k);
+				MSG_Node & trg = edge.get_target();
+				//auto iter = block_utility.find(&trg);
+				//double tarutility = iter->second;
+				out <<  src.get_node_id()  <<	"  ->  " <<  trg.get_node_id()  << "\n";
+			}
+		}
+	}
+	out << "}";
+	out << std::endl;
+}
+
+/* print the information of nodes in graph */
+static void print_graph(const MS_Graph & graph, std::ostream & out) {
+	std::set<MSG_Node *> subsumings;
+	std::set<MSG_Node *> subsummeds;
+	long n = graph.size();
+
+	out << "node\tmutants\tdegree\tnext_node\n";
+	for (long id = 0; id < n; id++) {
+		MSG_Node & node = graph.get_node(id);
+		if (node.get_score_degree() > 0) {
+			out << id << "\t";
+			out << node.get_mutants().number_of_mutants() << "\t";
+			out << node.get_score_degree() << "\t";
+			
+
+			const MSG_Port & port = node.get_ou_port();
+			for (int k = 0; k < port.degree(); k++) {
+				MSG_Edge & edge = port.get_edge(k);
+				MSG_Node & trg = edge.get_target();
+				out << trg.get_node_id() << "; ";
+			}
+
+			out << "\n";
+		}
+	}
+	out << std::endl;
+}
+/* print {degree-utility-subsumed} */
+static void print_block(MS_Graph & csg, MS_Graph & msg, std::ostream & out) {
+	/* title */
+	out << "blockid\tcover-height\t";
+	out << "mut-avg-utility\n";
+
+	std::map<MSG_Node *, double> block_utility;
+	calculate_block_utility(csg,msg, block_utility);
+
+	size_t csg_n = csg.size(); size_t args[4];
+	for (size_t i = 0; i < csg_n; i++) {
+		MSG_Node & cnode = csg.get_node(i);
+		if(cnode.get_score_degree() >0){
+			out << cnode.get_node_id() << "\t";
+			
+			/* coverage-argument */
+			calculate_nodes_and_mutants(cnode, args);
+			out << args[0] << '\t';
+			auto iter = block_utility.find(&cnode);
+			double utility = iter->second;
+			out << utility << "\n";
+	
+		} 
+	} 
+	out << std::endl;
+
+
+}
+
 /* print {value; nodes; mutants;}*/
 static void print_value(MS_Graph & msg, std::ostream & out) {
 	/* declarations */
@@ -848,89 +936,33 @@ static void output_subsumption(MS_Graph & msg, MS_Graph & csg) {
 
 }
 
-static void select_mutants(std::set<Mutant::ID> & mutants, File & root) {
-	std::ifstream in(root.get_path() + "/analysis/selects.txt");
-	std::string line;
-	while (std::getline(in, line)) {
-		if (line.empty()) continue;
-		else {
-			Mutant::ID mid = std::atoi(line.c_str());
-			mutants.insert(mid);
+static void print_operator_sort(const MS_Graph & graph, std::ostream & out) {
+	out << "operator\toputility\n";
+	MutantSpace & space = graph.get_space();
+	Mutant::ID n = space.number_of_mutants();          
+	std::map<Mutant::ID, double> mutant_utility;
+	calculate_mutants_utility(graph,mutant_utility);
+	std::set<MSG_Node *> set;
+	for (Mutant::ID mid = 0; mid < n; mid++) {
+		if (!graph.has_node_of(mid)) continue;
+		Mutant & mutant = space.get_mutant(mid);
+		MSG_Node & root = graph.get_node_of(mid);
+		set.clear();
+		auto iter = mutant_utility.find(mid);
+		if (iter != mutant_utility.end()) {
+			double utility = iter->second;
+			out << "\t" << mutant.get_operator() << "\t" << utility << "\n";
 		}
 	}
-	in.close();
+	out << std::endl;
 }
-static void select_mutants(size_t s, size_t n, std::set<Mutant::ID> & mutants) {
-	mutants.clear();
-	while (s-- != 0) {
-		Mutant::ID mid;
-		do {
-			/* get standard seed */
-			double sed = std::rand();
-			sed = sed / RAND_MAX;
-
-			/* get mutant id */
-			mid = std::floor(sed * n);
-		} while (mutants.count(mid) > 0);
-		mutants.insert(mid);
-	}
-}
-static void output_score(MS_Graph & mgraph, CTest & ctest, 
-	const std::set<Mutant::ID> & mutants) {
-	TestSet * tests = ctest.malloc_test_set();
-
-	// compute minimal test set
-	MSG_Tester tester;
-	tester.open(mgraph);
-	tester.gen_tests(mutants, *tests);
-
-	// compute tests mutation score
-	double score = tester.eval_score(*tests);
-	double domsc = tester.eval_dom_score(*tests);
-
-	// utility
-	double utility = calculate_mutants_utility(mgraph, mutants);
-
-	// precision & recall
-	std::set<MSG_Node *> roots, recalled;
-	calculate_subsuming_nodes(mgraph, roots);
-	double precision = 0, recall = 0;
-	auto beg = mutants.begin(), end = mutants.end();
-	while (beg != end) {
-		Mutant::ID mid = *(beg++);
-		if (mgraph.has_node_of(mid)) {
-			MSG_Node & node = mgraph.get_node_of(mid);
-			long node_id = node.get_node_id();
-			if (roots.count(&node) > 0) {
-				recalled.insert(&node);
-				precision = precision + 1.0;
-			}
-		}
-	}
-	precision = precision / mutants.size();
-	recall = ((double)recalled.size()) / ((double)roots.size());
-
-	// output
-	std::cout << "\n/--------- Score Analysis ----------/\n";
-	std::cout << "\tMutants:\t" << mutants.size() << "\n";
-	std::cout << "\tTests:  \t" << tests->size() << "\n";
-	std::cout << "\tScore:  \t" << score << "\n";
-	std::cout << "\tDScore: \t" << domsc << "\n";
-	std::cout << "\tPrecis: \t" << precision << "\n";
-	std::cout << "\tRecall: \t" << recall << "\n";
-	std::cout << "\tUtility:\t" << utility << "\n";
-	std::cout << "/-------------------------------------/\n";
-
-	// delete
-	ctest.delete_test_set(tests); tester.close();
-}
-
 /* main method */
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "schedule2";
-	TestType ttype = TestType::schedule2;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -966,47 +998,23 @@ int main() {
 		load_cs_graph(root, cfile, cmutant, ctest, ctrace, cscore, cgraph);
 
 		// calculate
-		std::set<MSG_Node *> subsumings;
+		std::set<long> subsumings;
 		calculate_subsuming_nodes(mgraph, subsumings);
 
 		// output information about mutants
-		std::ofstream out1(root.get_path() + "/analysis/mutants.txt");
-		print_mutants(mgraph, cgraph, subsumings, out1); out1.close();
-		std::ofstream out2(root.get_path() + "/analysis/msgraph.txt");
-		print_graph(mgraph, out2); out2.close();
-		std::ofstream out3(root.get_path() + "/analysis/csgraph.txt");
-		print_graph(cgraph, out3); out3.close();
-		std::ofstream out4(root.get_path() + "/analysis/mblocks.txt");
-		print_block(cgraph, mgraph, out4); out4.close();
-		std::ofstream out5(root.get_path() + "/analysis/mvalues.txt");
-		print_value(mgraph, out5); out5.close();
+		std::ofstream out6(root.get_path() + "/analysis/csubgraph.txt");
+		print_cblock_edges(cgraph,mgraph, out6); out6.close(); 
+
+		std::ofstream out7(root.get_path() + "/analysis/msubgraph.txt");
+		print_ms_edges(mgraph, out7); out7.close();
+
+		std::ofstream out8(root.get_path() + "/analysis/operatorutility.txt");
+		print_operator_sort(mgraph, out8); out8.close();
 
 		// stdout analysis
 		ouput_block(cgraph, mgraph);
 		output_subsumption(mgraph, cgraph);
 
-		// user-select mutants
-		std::set<Mutant::ID> mutants;
-		select_mutants(mutants, root);
-		output_score(mgraph, ctest, mutants);
-		// rand-select mutants
-		size_t n = mspace.number_of_mutants();
-		//size_t s = mutants.size();
-		size_t s = n * 0.1;
-		select_mutants(s, n, mutants);
-		output_score(mgraph, ctest, mutants);
-
-		// correlations
-		// test subsumption graph for mutants
-		// test_ms_graph(root, cfile, funcs, cmutant, ctest, cscore, mgraph);
-		// test subsumption graph for coverage
-		// test_cv_graph(root, cfile, funcs, cmutant, ctest, ctrace, cscore, cgraph);
-		// validate
-		// test_cv_ms_graphs(mspace, mgraph, cgraph);
-		// print-relations
-		// evaluate_equivalence(mspace, mgraph, cgraph);
-
-		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";
 	}
 
@@ -1018,3 +1026,4 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/
