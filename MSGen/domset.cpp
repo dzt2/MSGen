@@ -66,15 +66,15 @@ void DomSetBuilder_Greedy::derive_score_set(Mutant::ID mid, std::set<TestCase::I
 	for (tid = 0; tid < n; tid++) {
 		if (matrix->get_result(mid, tid))
 			scoreset.insert(tid);
+		counter->testing(mid, tid);
 	}
 }
 bool DomSetBuilder_Greedy::is_killed_by_all(Mutant::ID mj, const std::set<TestCase::ID> & scoreset) {
-	compare_counts = compare_counts + 1;		// get the efficiency analysis
-
 	auto beg = scoreset.begin();
 	auto end = scoreset.end();
 	while (beg != end) {
 		TestCase::ID tid = *(beg++);
+		counter->testing(mj, tid);
 		if (!(matrix->get_result(mj, tid)))
 			return false;
 	}
@@ -86,15 +86,17 @@ void DomSetBuilder_Greedy::erase_subsummeds(Mutant::ID mi, std::set<Mutant::ID> 
 	/* get score set of mi */
 	std::set<TestCase::ID> scoreset;
 	derive_score_set(mi, scoreset);
-	if (scoreset.empty()) return;
 
-	/* count select */ select_times++;
+	/* determine equivalent */
+	counter->equivalent(mi);
+	if (scoreset.empty()) return;
 
 	/* compute those subsumed by mi */
 	std::set<Mutant::ID> erases;
 	auto beg = M.begin(), end = M.end();
 	while (beg != end) {
 		Mutant::ID mj = *(beg++);
+		counter->compare(mi, mj);
 		if (is_killed_by_all(mj, scoreset))
 			erases.insert(mj);
 	}
@@ -104,9 +106,6 @@ void DomSetBuilder_Greedy::erase_subsummeds(Mutant::ID mi, std::set<Mutant::ID> 
 	end = erases.end();
 	while (beg != end)
 		M.erase(*(beg++));
-
-	/* record efficiency */ 
-	elist.push_back(erases.size());
 
 	M.insert(mi);		// pope
 }
@@ -132,12 +131,12 @@ void DomSetBuilder_Greedy::compute(MutSet & ans) {
 	MutantSpace & mspace = ans.get_space();
 	Mutant::ID msize = mspace.number_of_mutants(), mid;
 	for (mid = 0; mid < msize; mid++) domset.insert(mid);
-	compare_counts = 0; select_times = 0;
 
 	/* compute the dominator set by elimination-greedly */
 	Mutant::ID mi; 
 	while (get_next_mutants(domset, records, mi)) {
 		records.insert(mi);
+		counter->decline(mi, domset.size());
 		erase_subsummeds(mi, domset);
 	}
 
@@ -199,6 +198,7 @@ const std::set<TestCase::ID> &  DomSetBuilder_Blocks::derive_score_set(
 		auto end = coverset.end();
 		while (beg != end) {
 			TestCase::ID tid = *(beg++);
+			counter->testing(mid, tid);
 			if (matrix->get_result(mid, tid))
 				scoreset.insert(tid);
 		}
@@ -212,12 +212,11 @@ const std::set<TestCase::ID> &  DomSetBuilder_Blocks::derive_score_set(
 	}
 }
 bool DomSetBuilder_Blocks::is_killed_by_all(Mutant::ID mid, const std::set<TestCase::ID> & tests) {
-	compare_counts++;
-
 	auto beg = tests.begin();
 	auto end = tests.end();
 	while (beg != end) {
 		TestCase::ID tid = *(beg++);
+		counter->testing(mid, tid);
 		if (!(matrix->get_result(mid, tid)))
 			return false;
 	}
@@ -227,6 +226,7 @@ void DomSetBuilder_Blocks::erase_subsummeds(Mutant::ID mid,
 	std::set<Mutant::ID> & M, const std::set<TestCase::ID> & scoreset) {
 	M.erase(mid);						// push
 
+	counter->equivalent(mid);
 	if (!scoreset.empty()) {
 		/* mutants to be eliminated */
 		std::set<Mutant::ID> trash;
@@ -235,13 +235,11 @@ void DomSetBuilder_Blocks::erase_subsummeds(Mutant::ID mid,
 		auto beg = M.begin();
 		auto end = M.end();
 		while (beg != end) {
-			Mutant::ID mid = *(beg++);
-			if (is_killed_by_all(mid, scoreset))
-				trash.insert(mid);
+			Mutant::ID mj = *(beg++);
+			counter->compare(mid, mj);
+			if (is_killed_by_all(mj, scoreset))
+				trash.insert(mj);
 		}
-
-		/* record efficiency */
-		elist.push_back(trash.size());
 
 		/* eliminate those subsummed by mid */
 		beg = trash.begin();
@@ -282,11 +280,11 @@ void DomSetBuilder_Blocks::compute_inner_block(std::set<Mutant::ID> & M,
 	while (get_next_mutants(domset, records, mid)) {
 		// record the mutant as visited
 		records.insert(mid);	
+		counter->decline(mid, domset.size() + M.size());
 
 		/* get the score set of this mutant */
 		const std::set<Mutant::ID> & scoreset
 			= derive_score_set(coverset, mid);
-		if(!scoreset.empty()) select_times++;
 
 		/* eliminate those subsummed by mid */
 		erase_subsummeds(mid, domset, scoreset);
@@ -347,6 +345,7 @@ void DomSetBuilder_Blocks::compute_inter_block(std::set<Mutant::ID> & M,
 	auto end = domset.end();
 	while (beg != end) {
 		Mutant::ID mi = *(beg++);
+		counter->decline(mi, M.size() + domset.size());
 
 		/* get feasible domain of the mutant */
 		const std::set<TestCase::ID> & scoreset = derive_score_set(coverset, mi);
@@ -455,7 +454,6 @@ void DomSetBuilder_Blocks::compute(MutSet & ans) {
 				M.insert(mid);
 		}
 	}
-	select_times = 0; compare_counts = 0;
 
 	/* sort block based on its dominance */
 	std::vector<MSG_Node *> list;

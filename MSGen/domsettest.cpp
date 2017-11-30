@@ -91,16 +91,56 @@ static ScoreMatrix & load_score_set(const CodeFile & cfile,
 	return *matrix;		// return dynamic matrix
 }
 
-// analysis output
-static void print_eliminates(DomSetBuilder & builder, size_t init, std::ostream & out) {
-	out << "loops\teliminates\tremainders\tefficiency\n";
-	const std::vector<size_t> & eliminates = builder.get_eliminates();
-	for (int i = 0; i < eliminates.size(); i++) {
-		out << i << "\t" << eliminates[i] << "\t" 
-			<< init << "\t" << ((double) eliminates[i])/((double) init) << "\n";
-		init = init - eliminates[i];
+// file-output methods
+static void output_testing(const std::string & file, DomSetBuilder & builder) {
+	// declarations
+	ScoreMatrix & input = builder.get_input_matrix();
+	MutantSpace & mspace = input.get_mutant_space();
+	Mutant::ID n = mspace.number_of_mutants();
+	DomSetAlgorithm_Counter & counter
+		= builder.get_performance_counter();
+
+	// outputs
+	std::ofstream out(file);
+	out << "Mutant\t#test\n";
+	for (Mutant::ID mid = 0; mid < n; mid++) {
+		size_t tnum = counter.get_mutant_tests(mid);
+		out << mid << "\t" << tnum << "\n";
 	}
-	out << std::endl;
+	out << std::endl; out.close();
+}
+static void output_compare(const std::string & file, DomSetBuilder & builder) {
+	// declarations
+	ScoreMatrix & input = builder.get_input_matrix();
+	MutantSpace & mspace = input.get_mutant_space();
+	Mutant::ID n = mspace.number_of_mutants();
+	DomSetAlgorithm_Counter & counter
+		= builder.get_performance_counter();
+
+	std::ofstream out(file);
+	out << "Mutant\t#trans\n";
+	for (Mutant::ID mid = 0; mid < n; mid++) {
+		size_t tnum = counter.get_states_trans(mid);
+		out << mid << "\t" << tnum << "\n";
+	}
+	out << std::endl; out.close();
+}
+static void output_decline(const std::string & file, DomSetBuilder & builder) {
+	// declarations
+	DomSetAlgorithm_Counter & counter
+		= builder.get_performance_counter();
+
+	std::ofstream out(file);
+	out << "Mutant\t#DSet\n";
+
+	const std::vector<MutPair> &
+		declines = counter.get_declines();
+	for (int i = 0; i < declines.size(); i++) {
+		MutPair pair = declines[i];
+		out << pair.mid << "\t" << pair.declines << "\n";
+	}
+
+	out << std::endl; out.close();
 }
 
 // compute methods
@@ -166,7 +206,7 @@ static void load_cs_graph(const File & root, const CodeFile & cfile,
 	ctest.delete_test_set(&tests);
 }
 /* compute dominator set by greedy algorithm */
-static void compute_dominator_set_by_greedy(ScoreMatrix & matrix, MutSet & domset) {
+static void compute_dominator_set_by_greedy(ScoreMatrix & matrix, MutSet & domset, File & root) {
 	// compute the dominator set by greedy algorithm
 	DomSetBuilder_Greedy builder;
 	time_t start = time(nullptr);
@@ -174,49 +214,48 @@ static void compute_dominator_set_by_greedy(ScoreMatrix & matrix, MutSet & domse
 	builder.build(domset);
 	time_t end = time(nullptr);
 
-	size_t n = matrix.get_mutant_space().
-		number_of_mutants() - matrix.get_equivalents();
-	std::ofstream out("../../myefficiency.txt");
-	print_eliminates(builder, n, out); out.close();
-
-	builder.close();
-
 	// efficiency analysis
-	size_t T = matrix.number_of_testings(), N = matrix.number_of_all_testings();
-	std::cout << "\n/------------ Greedy Algorithm -------------------/\n";
-	std::cout << "\tDominator-set: " << domset.size() << "\n";
-	std::cout << "\tExecution-rate: " << T << " / " << N << " (" << ((double)T) / ((double)N) << ")\n";
-	std::cout << "\tAnalysis time: " << builder.get_comparisons() << " times and " << difftime(end, start) << " seconds\n";
-	std::cout << "\tSelect-times: " << builder.get_selections() << "/" << matrix.get_mutant_space().number_of_mutants() << "\n";
-	std::cout << "/-------------------------------------------------/\n";
+	std::string prefix = root.get_path() + "/analysis/";
+	output_testing(prefix + "greedy_testing.txt", builder);
+	output_compare(prefix + "greedy_compare.txt", builder);
+	output_decline(prefix + "greedy_decline.txt", builder);
+
+	// end
+	builder.close();
+	std::cout << "/------ Greedy Algorithm -------/\n";
+	std::cout << "\tEquivalent: " << matrix.get_equivalents() << "\n";
+	std::cout << "\tSubsumings: " << domset.size() << "\n";
+	std::cout << "/-------------------------------/\n";
 }
 /* compute dominator set by coverage algorithm */
-static void compute_dominator_set_by_coverage(ScoreMatrix & matrix, MS_Graph & csg, MutSet & domset) {
+static void compute_dominator_set_by_coverage(ScoreMatrix & matrix, MS_Graph & csg, MutSet & domset, File & root) {
 	// compute dominator set by coverage algorithm
 	DomSetBuilder_Blocks builder(csg);
 	time_t start = time(nullptr);
 	builder.open(matrix);
 	builder.build(domset);
 	time_t end = time(nullptr);
-	builder.close();
 
 	// efficiency analysis
-	size_t T = matrix.number_of_testings(), N = matrix.number_of_all_testings();
-	std::cout << "\n/------------ Coverage Algorithm -------------------/\n";
-	std::cout << "\tDominator-set: " << domset.size() << "\n";
-	std::cout << "\tExecution-rate: " << T << " / " << N << " (" << ((double)T) / ((double)N) << ")\n";
-	std::cout << "\tAnalysis time: " << builder.get_comparisons() << " times and " << difftime(end, start) << " seconds\n";
-	std::cout << "\tSelect-times: " << builder.get_selections() << "/" << matrix.get_mutant_space().number_of_mutants() << "\n";
-	std::cout << "/-------------------------------------------------/\n";
+	std::string prefix = root.get_path() + "/analysis/";
+	output_testing(prefix + "covers_testing.txt", builder);
+	output_compare(prefix + "covers_compare.txt", builder);
+	output_decline(prefix + "covers_decline.txt", builder);
+
+	// end
+	builder.close();
+	std::cout << "/------ Optimized Algorithm -------/\n";
+	std::cout << "\tEquivalent: " << matrix.get_equivalents() << "\n";
+	std::cout << "\tSubsumings: " << domset.size() << "\n";
+	std::cout << "/-------------------------------/\n";
 }
 
 // main method
-/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "Calendar";
-	TestType ttype = TestType::general;
+	std::string prname = "replace";
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -252,8 +291,8 @@ int main() {
 		MutSet domset(mspace); 
 		ScoreMatrix & matrix = load_score_set(cfile, cmutant, ctest, cscore);
 		std::cout << "Equivalent mutants: " << matrix.get_equivalents() << "\n";
-		compute_dominator_set_by_greedy(matrix, domset);
-		compute_dominator_set_by_coverage(matrix, cgraph, domset);
+		compute_dominator_set_by_greedy(matrix, domset, root);
+		compute_dominator_set_by_coverage(matrix, cgraph, domset, root);
 		delete &matrix;
 
 		// end this file
@@ -268,4 +307,3 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
-*/

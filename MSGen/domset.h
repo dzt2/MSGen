@@ -21,14 +21,15 @@ class DomSetBuilder;
 class DomSetBuilder_Greedy;
 class DomSetBuilder_Blocks;
 
+class DomSetAlgorithm_Counter;
+
 /* score matrix */
 class ScoreMatrix {
 public:
 	/* create a matrix based on the number of mutants and tests as inputs */
 	ScoreMatrix(MutantSpace & ms, TestSpace & ts) : mspace(ms), tspace(ts) {
 		matrix = new BitSeq(ms.number_of_mutants() * ts.number_of_tests());
-		record = new BitSeq(ms.number_of_mutants() * ts.number_of_tests());
-		matrix->clear_bytes(); record->clear_bytes();
+		matrix->clear_bytes(); 
 	}
 	/* deconstructor */
 	~ScoreMatrix() { delete matrix; }
@@ -43,37 +44,18 @@ public:
 	inline BitSeq::size_t get_index_of(Mutant::ID mid, TestCase::ID tid) const {
 		return mid * tspace.number_of_tests() + tid;
 	}
-	/* get the result of mutant tested against specified one */
-	inline bit get_result(Mutant::ID mid, TestCase::ID tid) const {
-		record->set_bit(mid * tspace.number_of_tests() + tid, BIT_1);
-		return matrix->get_bit(mid * tspace.number_of_tests() + tid);
-	}
-
-	/* get the number of testings during execution */
-	inline size_t number_of_testings() const {
-		size_t count = 0;
-		BitSeq::size_t n = record->bit_number();
-		for (BitSeq::size_t k = 0; k < n; k++) {
-			if (record->get_bit(k)) count++;
-		}
-		return count;
-	}
-	/* clear all the tested records */
-	inline void clear_all_testings() {
-		record->clear_bytes();
-	}
-	/* get the total number of testings (maximum) */
-	inline size_t number_of_all_testings() const {
-		return record->bit_number();
-	}
 	/* get number of equivalents */
 	inline size_t get_equivalents() const { return equivalents; }
+	/* whether mutant is killed by the test */
+	inline bool get_result(Mutant::ID mid, TestCase::ID tid) const {
+		BitSeq::size_t bias = mid * tspace.number_of_tests();
+		return matrix->get_bit(bias + tid) == BIT_1;
+	}
 
 private:
 	MutantSpace & mspace;
 	TestSpace & tspace;
 	BitSeq * matrix;
-	BitSeq * record;
 	size_t equivalents;
 };
 /* set for mutant records */
@@ -99,11 +81,91 @@ private:
 	MutantSpace & mspace;
 	std::set<Mutant::ID> mutants;
 };
+typedef struct {
+	Mutant::ID mid;
+	size_t declines;
+} MutPair;
+/* to count the costs in algorithm */
+class DomSetAlgorithm_Counter {
+
+public:
+	/* create a recorder with M * T space */
+	DomSetAlgorithm_Counter(size_t mutants, size_t tests)
+		: mnum(mutants), tnum(tests),
+		mutant_test(mutants * tests), state_trans(), declines() {}
+	/* deconstructor */
+	~DomSetAlgorithm_Counter() { init(); }
+
+	/* clear the data records */
+	void init() {
+		mutant_test.clear_bytes();
+		state_trans.clear();
+		declines.clear();
+	}
+	/* record mi testing tj */
+	inline void testing(Mutant::ID mid, TestCase::ID tid) {
+		mutant_test.set_bit(mid * tnum + tid, BIT_1);
+	}
+	/* determine whether mid is equivalent */
+	inline void equivalent(Mutant::ID mid) {
+		if (state_trans.count(mid) == 0)
+			state_trans[mid] = 0;
+
+		auto iter = state_trans.find(mid);
+		size_t num = iter->second + 1;
+		state_trans[mid] = num;
+	}
+	/* compute subsumption from mi to mj */
+	inline void compare(Mutant::ID mid, Mutant::ID mj) {
+		if (state_trans.count(mid) == 0)
+			state_trans[mid] = 0;
+
+		auto iter = state_trans.find(mid);
+		size_t num = iter->second + 1;
+		state_trans[mid] = num;
+	}
+	/* record the number of Ds for next selection */
+	inline void decline(Mutant::ID mid, size_t Ds_length) {
+		MutPair pair; pair.mid = mid;
+		pair.declines = Ds_length;
+		declines.push_back(pair);
+	}
+
+	/* get #test for mutant */
+	size_t get_mutant_tests(Mutant::ID mid) const {
+		size_t testing = 0;
+		size_t n = tnum, bias = mid * tnum;
+		for (size_t i = 0; i < tnum; i++) {
+			if (mutant_test.get_bit(i + bias) == BIT_1)
+				testing = testing + 1;
+		}
+		return testing;
+	}
+	/* get #trans for mutant */
+	size_t get_states_trans(Mutant::ID mid) const {
+		if (state_trans.count(mid) == 0)
+			return 0;
+		else {
+			auto iter = state_trans.find(mid);
+			return iter->second;
+		}
+	}
+	/* get decline-function */
+	const std::vector<MutPair> & get_declines() const { return declines; }
+
+private:
+	const size_t mnum, tnum;
+	BitSeq mutant_test;
+	std::map<Mutant::ID, size_t> state_trans;
+	std::vector<MutPair> declines;
+};
+
 /* builder for dominator set */
 class DomSetBuilder {
 protected:
 	/* construct a builder */
-	DomSetBuilder() : matrix(nullptr) {}
+	DomSetBuilder() : 
+		matrix(nullptr), counter(nullptr) {}
 	/* deconstructor */
 	virtual ~DomSetBuilder() { close(); }
 
@@ -120,6 +182,9 @@ public:
 	/* open to receive the inputs */
 	void open(ScoreMatrix & mat) { 
 		matrix = &mat; 
+		size_t mutnum = mat.get_mutant_space().number_of_mutants();
+		size_t tesnum = mat.get_test_space().number_of_tests();
+		counter = new DomSetAlgorithm_Counter(mutnum, tesnum);
 	}
 	/* build up the dominator set in ans based on matrix */
 	void build(MutSet & ans) {
@@ -131,36 +196,38 @@ public:
 			exit(CErrorType::InvalidArguments);
 		}
 		else {
-			matrix->clear_all_testings();
-			ans.clear_mutants(); compute(ans);
+			counter->init();
+			ans.clear_mutants(); 
+			compute(ans);
 		}
 	}
 	/* close the builder */
-	void close() { matrix = nullptr; elist.clear(); }
+	void close() {
+		if (counter != nullptr) delete counter;
+		counter = nullptr;
+	}
 
-	/* get the number of eliminated mutants each loop */
-	inline const std::vector<size_t> & get_eliminates() const { return elist; }
+	/* get the score matrix */
+	inline ScoreMatrix & get_input_matrix() const { return *matrix; }
+	/* get the counter for its performance */
+	inline DomSetAlgorithm_Counter & get_performance_counter() const { return *counter; }
 
 protected:
 	/* score function as basis for computation */
 	ScoreMatrix * matrix;
-	/* list to record the number of mutants eliminated by each loop */
-	std::vector<size_t> elist;
+	/* counter for performance */
+	DomSetAlgorithm_Counter * counter;
+
 };
 
 /* to determine dominator set based on classical greedy algorithm */
 class DomSetBuilder_Greedy : public DomSetBuilder {
 public:
 	/* create a builder based on greedy algorithm */
-	DomSetBuilder_Greedy() : DomSetBuilder(), 
-		compare_counts(0), select_times(0) {}
+	DomSetBuilder_Greedy() 
+		: DomSetBuilder() {}
 	/* deconstructor */
 	~DomSetBuilder_Greedy() { }
-
-	/* get the number of comparisons */
-	inline size_t get_comparisons() const { return compare_counts; }
-	/* get the times to select mutants */
-	inline size_t get_selections() const { return select_times; }
 
 protected:
 	/* compute the dominator set based on classical algorithm */
@@ -177,10 +244,6 @@ protected:
 		const std::set<Mutant::ID> & records, Mutant::ID & next);
 
 private:
-	/* number to compare two mutants to determine subsumption */
-	size_t compare_counts;
-	/* times to select mutant */
-	size_t select_times;
 
 };
 /* to determin dominator set based on coverage approach */
@@ -192,11 +255,6 @@ public:
 		cover_sets(), score_sets() {}
 	/* destructor */
 	~DomSetBuilder_Blocks() { clear_cache(); }
-
-	/* get the number of comparisons */
-	inline size_t get_comparisons() const { return compare_counts; }
-	/* get the times to select mutants */
-	inline size_t get_selections() const { return select_times; }
 
 private:
 	/* graph for block dominance */
@@ -252,7 +310,9 @@ protected:
 	// resource-methods
 	void clear_cache();
 private:
-	size_t compare_counts, select_times;
 	std::map<Mutant::ID, std::set<TestCase::ID> *> score_sets;
 	std::map<MSG_Node *, std::set<TestCase::ID> *> cover_sets;
 };
+
+
+

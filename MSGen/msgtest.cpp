@@ -926,6 +926,7 @@ static void output_score(MS_Graph & mgraph, CTest & ctest,
 }
 
 /* main method */
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
@@ -1018,3 +1019,4 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/
