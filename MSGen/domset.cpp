@@ -280,7 +280,7 @@ void DomSetBuilder_Blocks::compute_inner_block(std::set<Mutant::ID> & M,
 	while (get_next_mutants(domset, records, mid)) {
 		// record the mutant as visited
 		records.insert(mid);	
-		counter->decline(mid, domset.size() + M.size());
+		counter->decline(mid, domset.size());
 
 		/* get the score set of this mutant */
 		const std::set<Mutant::ID> & scoreset
@@ -343,9 +343,10 @@ void DomSetBuilder_Blocks::compute_inter_block(std::set<Mutant::ID> & M,
 
 	auto beg = domset.begin();
 	auto end = domset.end();
+	int bias = 0;
 	while (beg != end) {
 		Mutant::ID mi = *(beg++);
-		counter->decline(mi, M.size() + domset.size());
+		counter->decline(mi, M.size() + domset.size() - (bias--));
 
 		/* get feasible domain of the mutant */
 		const std::set<TestCase::ID> & scoreset = derive_score_set(coverset, mi);

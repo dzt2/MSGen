@@ -121,6 +121,7 @@ static void output_compare(const std::string & file, DomSetBuilder & builder) {
 	out << "Mutant\t#trans\n";
 	for (Mutant::ID mid = 0; mid < n; mid++) {
 		size_t tnum = counter.get_states_trans(mid);
+		if (tnum <= 1) continue;
 		out << mid << "\t" << tnum << "\n";
 	}
 	out << std::endl; out.close();
@@ -215,9 +216,9 @@ static void compute_dominator_set_by_greedy(ScoreMatrix & matrix, MutSet & domse
 	time_t end = time(nullptr);
 
 	// efficiency analysis
-	std::string prefix = root.get_path() + "/analysis/";
+	std::string prefix = root.get_path() + "/analysis/performance/";
 	output_testing(prefix + "greedy_testing.txt", builder);
-	output_compare(prefix + "greedy_compare.txt", builder);
+	output_compare(prefix + "greedy_transit.txt", builder);
 	output_decline(prefix + "greedy_decline.txt", builder);
 
 	// end
@@ -237,9 +238,9 @@ static void compute_dominator_set_by_coverage(ScoreMatrix & matrix, MS_Graph & c
 	time_t end = time(nullptr);
 
 	// efficiency analysis
-	std::string prefix = root.get_path() + "/analysis/";
+	std::string prefix = root.get_path() + "/analysis/performance/";
 	output_testing(prefix + "covers_testing.txt", builder);
-	output_compare(prefix + "covers_compare.txt", builder);
+	output_compare(prefix + "covers_transit.txt", builder);
 	output_decline(prefix + "covers_decline.txt", builder);
 
 	// end
@@ -250,12 +251,41 @@ static void compute_dominator_set_by_coverage(ScoreMatrix & matrix, MS_Graph & c
 	std::cout << "/-------------------------------/\n";
 }
 
+// print-method
+/* print the information of nodes in graph */
+static void print_graph(const MS_Graph & graph, std::ostream & out) {
+	std::set<MSG_Node *> subsumings;
+	std::set<MSG_Node *> subsummeds;
+	long n = graph.size();
+
+	out << "node\tmutants\tdegree\tnext_set\n";
+	for (long id = 0; id < n; id++) {
+		MSG_Node & node = graph.get_node(id);
+		if (node.get_score_degree() > 0) {
+			out << id << "\t";
+			out << node.get_mutants().number_of_mutants() << "\t";
+			out << node.get_score_degree() << "\t";
+
+			const MSG_Port & port = node.get_ou_port();
+			for (int k = 0; k < port.degree(); k++) {
+				MSG_Edge & edge = port.get_edge(k);
+				MSG_Node & trg = edge.get_target();
+				out << trg.get_node_id() << "; ";
+			}
+
+			out << "\n";
+		}
+	}
+	out << std::endl;
+}
+
 // main method
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
-	TestType ttype = TestType::replace;
+	std::string prname = "print_tokens2";
+	TestType ttype = TestType::print_tokens2;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -286,6 +316,10 @@ int main() {
 		MutantSpace & mspace = cmutant.get_mutants_of(cfile);
 		MS_Graph cgraph(mspace);
 		load_cs_graph(root, cfile, cmutant, ctest, ctrace, cscore, cgraph);
+		
+		// output graph 
+		std::ofstream out1(root.get_path() + "/analysis/cgraph.txt");
+		print_graph(cgraph, out1); out1.close();
 
 		// get dominator set
 		MutSet domset(mspace); 
@@ -307,3 +341,4 @@ int main() {
 
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/
