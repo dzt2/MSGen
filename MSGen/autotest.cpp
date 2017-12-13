@@ -6,7 +6,6 @@
 #include <iostream>
 #include <fstream>
 
-
 void swap_array(int *a, int i, int j) {
 	if (i == j) 
 		return;
@@ -36,6 +35,26 @@ void output_permutation(int a[], int k,
 }
 void output_permutation(int a[], int n, std::ostream & out) {
 	output_permutation(a, n, n, out);
+}
+void random_list(int a[], int n) {
+	for (int i = 0; i < n; i++) {
+		a[i] = std::rand();
+		if (std::rand() % 2)
+			a[i] = -a[i];
+	}
+}
+void limits_list(int a[], int n, int min, int max) {
+	for (int i = 0; i < n; i++) {
+		int val = std::rand();
+		val = val % (max - min);
+		a[i] = val + min;
+	}
+}
+void output_array(int a[], int n, std::ostream & out) {
+	for (int i = 0; i < n; i++) {
+		out << a[i] << " ";
+	}
+	out << std::endl;
 }
 
 /* for bubble.c */
@@ -230,6 +249,44 @@ int main() {
 	out.close();
 
 	return 0;
+}
+*/
+
+/* new-bubble */
+/*
+int main() {
+	std::string prefix = "../../../MyData/NewBanchmark/";
+	//std::string prname = "bubble";
+	std::string prname = "insert";
+	//std::string prname = "qsort";
+	//std::string prname = "minmax";
+	std::ofstream out(prefix + prname + "/tsuite");
+
+	const int sizes = 97;
+	const int tries = 16;
+	const int lists = 32;
+
+	int *list, n, val; 
+	for (int i = 0; i < tries; i++) {
+		n = std::rand();
+		n = std::abs(n);
+		n = n % sizes + 1;
+
+		list = new int[n];
+		for (int j = 0; j < lists; j++) {
+			random_list(list, n);
+			output_array(list, n, out);
+		}
+		
+		val = std::rand();
+		limits_list(list, n, val, val + 1);
+		output_array(list, n, out);
+
+		delete list;
+	}
+
+	std::cout << "Press any key to exit...";
+	getchar(); exit(0);
 }
 */
 

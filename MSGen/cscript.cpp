@@ -52,7 +52,7 @@ void CScriptFile::generate() const {
 		if (timeout > 0)
 			out << "timeout " << timeout << " ";
 
-		out << exec << " " << tc.get_input_string() << "> " << outputs << tc.get_output_file() << "\n";
+		out << exec << " " << tc.get_input_string() << " > " << outputs << tc.get_output_file() << "\n";
 
 		// for flex script
 		// out << "rm lex.yy.c error lex.backup outputs\n";
@@ -127,7 +127,7 @@ void CTraceScriptFile::generate() const {
 		if (echo) out << "echo \"running test " << tc.get_id() << "\"\n";
 		out << "rm *.gcda *.gcov\n";
 		if (timeout > 0) out << "timeout " << timeout << " ";
-		out << exec << " " << tc.get_input_string() << "> " << outputs << tc.get_output_file() << "\n";
+		out << exec << " " << tc.get_input_string() << " > " << outputs << tc.get_output_file() << "\n";
 		out << "gcov *.c\n";
 		// for flex
 		// out << "gcov flex.c\n";

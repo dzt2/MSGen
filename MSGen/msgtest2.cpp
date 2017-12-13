@@ -385,6 +385,7 @@ static void print_graphic(const MS_Graph & graph, std::ostream & out) {
 }
 
 // main tester
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
@@ -444,3 +445,4 @@ int main() {
 	// end of all
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/
