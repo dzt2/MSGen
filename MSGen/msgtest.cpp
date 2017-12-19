@@ -930,8 +930,8 @@ static void output_score(MS_Graph & mgraph, CTest & ctest,
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "schedule2";
-	TestType ttype = TestType::schedule2;
+	std::string prname = "bubble";
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));

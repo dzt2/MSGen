@@ -216,9 +216,9 @@ ScoreVector * FileScoreProducer::produce() {
 ScoreVector * ScoreFilter::produce() {
 	ScoreVector * vec;
 	while ((vec = producer.produce()) != nullptr) {
-		if (vec->get_degree() == 0)			// filter equivalent 
-			continue;
-		else if (_template.count(vec->get_mutant()) == 0)	// filter unselected ones
+		// if (vec->get_degree() == 0)			// filter equivalent 
+			// continue;
+		if (_template.count(vec->get_mutant()) == 0)	// filter unselected ones
 			continue;
 		else return vec;		// otherwise, return the vector
 	}
