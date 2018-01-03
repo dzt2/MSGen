@@ -175,8 +175,8 @@ static void select_operators(std::set<std::string> & operators) {
 	/* key operators */
 	operators.insert("u-VDTR");
 	operators.insert("u-VTWD");
-	operators.insert("I-DirVarIncDec");
-	operators.insert("I-IndVarIncDec");
+	//operators.insert("I-DirVarIncDec");
+	//operators.insert("I-IndVarIncDec");
 }
 
 // build methods
@@ -516,9 +516,9 @@ static void test_sub_mutants_msg(const File & root, const CodeFile & cfile,
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "Calendar";
-	std::string function = "print_calendar";
-	TestType ttype = TestType::general;
+	std::string prname = "tot_info";
+	//std::string function = "myfabs";
+	TestType ttype = TestType::tot_info;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
@@ -543,8 +543,8 @@ int main() {
 		const CodeFile & cfile = *(*(beg++));
 
 		// test-module
-		//test_all_mutants_msg(root, cfile, funcs, cmutant, ctest, cscore);
-		test_sub_mutants_msg(root, cfile, function, funcs, cmutant, ctest, cscore);
+		test_all_mutants_msg(root, cfile, funcs, cmutant, ctest, cscore);
+		//test_sub_mutants_msg(root, cfile, function, funcs, cmutant, ctest, cscore);
 
 		// end this file
 		std::cout << "End file: \"" << cfile.get_file().get_path() << "\"\n";

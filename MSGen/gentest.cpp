@@ -5,7 +5,7 @@
 /*
 int main() {
 	// create projects
-	std::string prefix = "../../../MyData/NewBanchmark/"; std::string name = "quicks_var_list";
+	std::string prefix = "../../../MyData/ContextTests/"; std::string name = "square_double";
 	File & dir = *(new File(prefix + name)); CProgram & program = *(new CProgram(dir));
 	CTest & tproject = *(new CTest(TestType::general, dir, program.get_exec()));
 	CTrace & cproject = *(new CTrace(dir, program.get_source(), tproject.get_space()));
