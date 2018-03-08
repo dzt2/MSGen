@@ -224,6 +224,43 @@ static void load_ms_graph(
 /* ------------------ MSG Building ------------------------- */
 
 
+/* ------------------ Analysis Methods ------------------------- */
+/* get the nodes subsumed by specified node */
+static void get_subsumed(
+	MSG_Node & root, 
+	std::set<MSG_Node *> & children) {
+	// initialization
+	children.clear();
+	std::queue<MSG_Node *> queue;
+	queue.push(&root);
+
+	// iterate the children 
+	MSG_Node * node;
+	while (!queue.empty()) {
+		node = queue.front();
+		queue.pop();
+
+		const MSG_Port & port 
+			= node->get_ou_port();
+		int n = port.degree();
+
+		for (int i = 0; i < n; i++) {
+			MSG_Edge & edge = port.get_edge(i);
+			MSG_Node & next = edge.get_target();
+
+			if (children.count(&next) == 0) {
+				children.insert(&next);
+				queue.push(&next);
+			}
+		} // end for
+
+	} // end while
+
+	return;		// end
+}
+/* ------------------ Analysis Methods ------------------------- */
+
+
 /* ------------------ Outputters ------------------------- */
 /* ( mid | cid | operator | function | line | original | replace ) */
 static void output_mutants(
@@ -279,23 +316,50 @@ static void output_mutants(
 }
 /* node | degree | mutants | nextset */
 static void output_graphic(const MS_Graph & graph, std::ostream & out) {
-	out << "node\tdegree\tmutants\tnext-set\n";
+	// title
+	out << "id\tmutants\tdegree\tnextset\tdnodes\tdmutants\tcnodes\tcmutants\n";
 
 	long n = graph.size(), k;
+	std::set<MSG_Node *> nodes;
 	for (k = 0; k < n; k++) {
+		// get next mutant
 		MSG_Node & node = graph.get_node(k);
-		out << node.get_node_id() << "\t";
-		out << node.get_score_degree() << "\t";
-		out << node.get_mutants().number_of_mutants() << "\t";
+		if (node.get_score_degree() == 0)
+			continue;
 
+		// basic information
+		out << node.get_node_id() << "\t";
+		out << node.get_mutants().number_of_mutants() << "\t";
+		out << node.get_score_degree() << "\t";
+
+		// print next nodes
+		int dnodes = 0, dmutants = 0;
 		const MSG_Port & port = node.get_ou_port();
 		for (int i = 0; i < port.degree(); i++) {
 			MSG_Edge & edge = port.get_edge(i);
 			MSG_Node & next = edge.get_target();
 
 			out << next.get_node_id() << "; ";
-		}
 
+			dnodes += 1;
+			dmutants += next.get_mutants().number_of_mutants();
+		}
+		out << "\t";
+
+		// direct subsumption
+		out << dnodes << "\t" << dmutants << "\t";
+
+		// output other subsumption
+		get_subsumed(node, nodes);
+		int ch_num = 0;
+		auto beg = nodes.begin();
+		auto end = nodes.end();
+		while (beg != end) 
+			ch_num += (*(beg++))->get_mutants().number_of_mutants();
+		out << nodes.size() << "\t";
+		out << ch_num << "\t";
+
+		// output line
 		out << '\n';
 	}
 	out << std::endl;
@@ -305,14 +369,19 @@ static void output_graphic(const MS_Graph & graph, std::ostream & out) {
 /* ------------------ Printters ------------------------- */
 static void print_msg_prevalence(const MS_Graph & graph) {
 	int n = graph.size(), m = 0, e = 0;
+	unsigned long max = 0, me;
 	for (int i = 0; i < n; i++) {
 		MSG_Node & node = graph.get_node(i);
-		m += node.get_mutants().number_of_mutants();
+		me = node.get_mutants().number_of_mutants();
+
+		m = m + me; 
 		e += node.get_ou_port().degree();
+		max = max + me * (me - 1) + e;
 	}
 	std::cout << "\n================ MSG-Prevalence =============\n";
-	std::cout << "\tMutants\tNodes\tEdges\n";
-	std::cout << m << "\t" << n << "\t" << e << "\n";
+	std::cout << "\tMutants\tNodes\tEdges\tSubsumes\tEssences\n";
+	std::cout << "\t" << m << "\t" << n << "\t" << e << "\t" 
+		<< max << "\t" << 2 * (m - n) + e << "\n";
 	std::cout << "================ MSG-Prevalence =============\n";
 }
 /* ------------------ Printters ------------------------- */
@@ -321,9 +390,9 @@ static void print_msg_prevalence(const MS_Graph & graph) {
 int main(int argc, char *argv[]) {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "bubble";
+	std::string prname = "replace";
 	std::string pdir = prefix + prname + "/analysis/";
-	TestType ttype = TestType::general;
+	TestType ttype = TestType::replace;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
