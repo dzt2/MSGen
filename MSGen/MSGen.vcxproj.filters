@@ -143,5 +143,8 @@
     <ClCompile Include="msgtest2.cpp">
       <Filter>Source Files\driver</Filter>
     </ClCompile>
+    <ClCompile Include="msgtest3.cpp">
+      <Filter>Source Files\driver</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

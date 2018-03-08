@@ -146,6 +146,7 @@
     <ClCompile Include="mgraph.cpp" />
     <ClCompile Include="msgtest.cpp" />
     <ClCompile Include="msgtest2.cpp" />
+    <ClCompile Include="msgtest3.cpp" />
     <ClCompile Include="sgraph.cpp" />
     <ClCompile Include="suoprt.cpp" />
   </ItemGroup>

@@ -513,6 +513,7 @@ static void test_sub_mutants_msg(const File & root, const CodeFile & cfile,
 }
 
 // main tester
+/*
 int main() {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
@@ -559,3 +560,4 @@ int main() {
 	// end of all
 	std::cout << "\nPress any key to exit...\n"; getchar(); exit(0);
 }
+*/
