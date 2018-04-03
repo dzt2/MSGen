@@ -258,6 +258,51 @@ static void get_subsumed(
 
 	return;		// end
 }
+/* get the nodes that subsume the leaf */
+static void get_subsuming(
+	MSG_Node & leaf,
+	std::set<MSG_Node *> & parents) {
+	// initialization
+	parents.clear();
+	std::queue<MSG_Node *> queue;
+	queue.push(&leaf);
+
+	// iterate the parents
+	MSG_Node * node;
+	while (!queue.empty()) {
+		node = queue.front();
+		queue.pop();
+
+		const MSG_Port & port 
+			= node->get_in_port();
+		int n = port.degree();
+
+		for (int i = 0; i < n; i++) {
+			MSG_Edge & edge = port.get_edge(i);
+			MSG_Node & prev = edge.get_source();
+
+			if (parents.count(&prev) == 0) {
+				parents.insert(&prev);
+				queue.push(&prev);
+			}
+		}
+	} // end while
+
+	return;		// end
+}
+/* compute the utility of a mutant node */
+static double get_utility_of(MSG_Node & node) {
+	std::set<MSG_Node *> nodes;
+	int parents, children;
+
+	get_subsuming(node, nodes);
+	parents = nodes.size();
+	get_subsumed(node, nodes);
+	children = nodes.size();
+
+	return ((double)children) 
+		/ ((double)(parents + children));
+}
 /* ------------------ Analysis Methods ------------------------- */
 
 
@@ -317,7 +362,7 @@ static void output_mutants(
 /* node | degree | mutants | nextset */
 static void output_graphic(const MS_Graph & graph, std::ostream & out) {
 	// title
-	out << "id\tmutants\tdegree\tnextset\tdnodes\tdmutants\tcnodes\tcmutants\n";
+	out << "id\tmutants\tdegree\tutility\tnextset\tdnodes\tdmutants\tcnodes\tcmutants\n";
 
 	long n = graph.size(), k;
 	std::set<MSG_Node *> nodes;
@@ -331,6 +376,7 @@ static void output_graphic(const MS_Graph & graph, std::ostream & out) {
 		out << node.get_node_id() << "\t";
 		out << node.get_mutants().number_of_mutants() << "\t";
 		out << node.get_score_degree() << "\t";
+		out << get_utility_of(node) << "\t";
 
 		// print next nodes
 		int dnodes = 0, dmutants = 0;
@@ -368,20 +414,31 @@ static void output_graphic(const MS_Graph & graph, std::ostream & out) {
 
 /* ------------------ Printters ------------------------- */
 static void print_msg_prevalence(const MS_Graph & graph) {
+	/* declarations */
 	int n = graph.size(), m = 0, e = 0;
-	unsigned long max = 0, me;
+	unsigned long all_equiv = 0, ess_equiv = 0;
+	unsigned long all_stric = 0, ess_stric = 0;
+	std::set<MSG_Node *> children;
+
+	/* compute the number of relationships */
 	for (int i = 0; i < n; i++) {
 		MSG_Node & node = graph.get_node(i);
-		me = node.get_mutants().number_of_mutants();
+		if (node.get_score_degree() > 0) {
+			int me = node.get_mutants().number_of_mutants();
+			int se = node.get_ou_port().degree();
+			get_subsumed(node, children);
 
-		m = m + me; 
-		e += node.get_ou_port().degree();
-		max = max + me * (me - 1) + e;
+			m = m + me; e = e + se;
+			ess_equiv = ess_equiv + (me - 1);
+			all_equiv = all_equiv + (me - 1) * me;
+			ess_stric = ess_stric + se;
+			all_stric = all_stric + children.size() - 1;
+		}
 	}
 	std::cout << "\n================ MSG-Prevalence =============\n";
-	std::cout << "\tMutants\tNodes\tEdges\tSubsumes\tEssences\n";
+	std::cout << "\tMutants\tNodes\tEdges\tAll-Equiv\tEss-Equiv\tAll-Strict\tEss-Strict\n";
 	std::cout << "\t" << m << "\t" << n << "\t" << e << "\t" 
-		<< max << "\t" << 2 * (m - n) + e << "\n";
+		<< all_equiv << "\t" << ess_equiv << "\t" << all_stric << "\t" << ess_stric << "\n";
 	std::cout << "================ MSG-Prevalence =============\n";
 }
 /* ------------------ Printters ------------------------- */
@@ -390,9 +447,9 @@ static void print_msg_prevalence(const MS_Graph & graph) {
 int main(int argc, char *argv[]) {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "replace";
+	std::string prname = "triangle";
 	std::string pdir = prefix + prname + "/analysis/";
-	TestType ttype = TestType::replace;
+	TestType ttype = TestType::general;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
