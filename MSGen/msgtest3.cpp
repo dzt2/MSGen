@@ -416,9 +416,9 @@ static void output_graphic(const MS_Graph & graph, std::ostream & out) {
 static void print_msg_prevalence(const MS_Graph & graph) {
 	/* declarations */
 	int n = graph.size(), m = 0, e = 0;
-	unsigned long all_equiv = 0, ess_equiv = 0;
-	unsigned long all_stric = 0, ess_stric = 0;
 	std::set<MSG_Node *> children;
+	unsigned long all_eq = 0, all_sc = 0;
+	unsigned long ess_eq = 0, ess_sc = 0;
 
 	/* compute the number of relationships */
 	for (int i = 0; i < n; i++) {
@@ -429,16 +429,26 @@ static void print_msg_prevalence(const MS_Graph & graph) {
 			get_subsumed(node, children);
 
 			m = m + me; e = e + se;
-			ess_equiv = ess_equiv + (me - 1);
-			all_equiv = all_equiv + (me - 1) * me;
-			ess_stric = ess_stric + se;
-			all_stric = all_stric + children.size() - 1;
-		}
-	}
+			ess_eq = ess_eq + (me - 1);
+			ess_sc = ess_sc + se;
+			all_eq = all_eq + me * (me - 1);
+
+			auto beg = children.begin();
+			auto end = children.end();
+			while (beg != end) {
+				MSG_Node & next = *(*(beg++));
+				if (&node != &next) {
+					int mt = next.get_mutants().number_of_mutants();
+					all_sc = all_sc + me * mt;
+				}
+			}	// end while
+
+		}	// end if
+	}	// end for
 	std::cout << "\n================ MSG-Prevalence =============\n";
-	std::cout << "\tMutants\tNodes\tEdges\tAll-Equiv\tEss-Equiv\tAll-Strict\tEss-Strict\n";
-	std::cout << "\t" << m << "\t" << n << "\t" << e << "\t" 
-		<< all_equiv << "\t" << ess_equiv << "\t" << all_stric << "\t" << ess_stric << "\n";
+	std::cout << "Mutants\tNodes\tEdges\tAll-Equiv\tAll-Strict\tEss-Equiv\tEss-Strict\n";
+	std::cout << m << "\t" << n << "\t" << e << "\t" << all_eq << "\t" << 
+		all_sc << "\t" << ess_eq << "\t" << ess_sc << "\n";
 	std::cout << "================ MSG-Prevalence =============\n";
 }
 /* ------------------ Printters ------------------------- */
@@ -447,9 +457,9 @@ static void print_msg_prevalence(const MS_Graph & graph) {
 int main(int argc, char *argv[]) {
 	// input-arguments
 	std::string prefix = "../../../MyData/SiemensSuite/";
-	std::string prname = "triangle";
+	std::string prname = "schedule2";
 	std::string pdir = prefix + prname + "/analysis/";
-	TestType ttype = TestType::general;
+	TestType ttype = TestType::schedule;
 
 	// get root file and analysis dir 
 	File & root = *(new File(prefix + prname));
